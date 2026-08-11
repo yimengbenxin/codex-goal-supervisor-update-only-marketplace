@@ -86,6 +86,7 @@ from goal_compass_runtime.convergence import (
     compact_status as compact_convergence_status,
     empty_state as empty_convergence_state,
     judge_trigger as convergence_judge_trigger,
+    record_collaboration_round as record_convergence_collaboration_round,
     record_evidence as record_convergence_evidence,
     record_iteration as record_convergence_iteration,
     refresh as refresh_convergence_state,
@@ -637,7 +638,9 @@ LEGACY_BUILTIN_MAIN_PATH_MARKERS = {
 }
 
 DEFAULT_PROTECTED_PRINCIPLES = [
-    "Every process step must create net execution benefit; do not let the harness become project noise or obstruction.",
+    "Every action taken by the model and every supervisory intervention by this plugin must produce net execution benefit.",
+    "Any action that may affect other modules without constraint or become noise for the entire project must be managed.",
+    "If the cost of a control by this plugin exceeds the rework it can prevent, that control must remain inactive.",
     "Prefer end-to-end product progress over local subsystem perfection.",
     "Do not let local subsystems consume the main product goal.",
     "Do not let edge cases redefine the core product.",
@@ -761,18 +764,22 @@ product work.
 
 ## Supreme Rule
 
-Every intervention must create net execution benefit. Keep the background layer
-quiet and call an explicit capability only for a concrete event where its likely
-saved rework exceeds its process cost.
+Every action taken by the model and every supervisory intervention by this
+plugin must produce net execution benefit. Any action that may affect other
+modules without constraint or become noise for the entire project must be
+managed. If the cost of a control by this plugin exceeds the rework it can
+prevent, that control must remain inactive.
 """
 
 MDCP_PROTOCOL_MD = """# Multi-Dimensional Collaboration Protocol For Goal Compass
 
 MDCP is used here as a cross-layer rule library, not as a new workflow.
 
-Supreme rule: every protocol step must create net execution benefit. Skip,
-simplify, or serialize a step when its coordination cost exceeds the rework or
-risk it prevents.
+Supreme rule: every action taken by the model and every supervisory intervention
+by this plugin must produce net execution benefit. Any action that may affect
+other modules without constraint or become noise for the entire project must be
+managed. If the cost of a control by this plugin exceeds the rework it can
+prevent, that control must remain inactive.
 
 Source reference:
 https://github.com/HanShengrunning/-multi-dimensional-collaboration-protocol
@@ -9207,6 +9214,9 @@ def cmd_status(args: argparse.Namespace) -> int:
             for key in ("blocked_reason", "recommended_action")
         },
     }
+    collaboration = convergence.get("collaboration") if isinstance(convergence.get("collaboration"), dict) else {}
+    if args.verbose or collaboration.get("status") not in {None, "IDLE"}:
+        convergence_compact["collaboration"] = collaboration
     completion = convergence.get("goal_completion", {}) if isinstance(convergence.get("goal_completion"), dict) else {}
     completion_certified = completion.get("status") == "CERTIFIED_COMPLETE"
     if not active or completion.get("status") != "NOT_CERTIFIED":
@@ -10840,6 +10850,41 @@ def cmd_convergence(args: argparse.Namespace) -> int:
             observed_at=now(),
         )
 
+    if args.record_collaboration:
+        required = {
+            "--source-thread": args.source_thread,
+            "--target-thread": args.target_thread,
+            "--claim": args.claim,
+        }
+        missing = [key for key, value in required.items() if not str(value or "").strip()]
+        if missing:
+            print(json.dumps({
+                "ok": False,
+                "error": "collaboration record is incomplete",
+                "missing": missing,
+            }, ensure_ascii=False))
+            return 2
+        if str(args.source_thread).strip() == str(args.target_thread).strip():
+            print(json.dumps({
+                "ok": False,
+                "error": "collaboration source and target must be different",
+            }, ensure_ascii=False))
+            return 2
+        state = record_convergence_collaboration_round(
+            state,
+            source=args.source_thread,
+            target=args.target_thread,
+            claim=args.claim,
+            evidence_ids=list(args.evidence_id or []),
+            artifact_refs=[
+                str(value).strip()
+                for value in (args.artifact_ref or [])
+                if str(value).strip() and Path(str(value).strip()).exists()
+            ],
+            state_transition=args.state_transition,
+            observed_at=now(),
+        )
+
     judge_result = None
     trigger = convergence_judge_trigger(
         state,
@@ -11044,6 +11089,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--final-validation-id", action="append", default=[])
     p.add_argument("--completion-summary")
     p.add_argument("--record-iteration", action="store_true")
+    p.add_argument("--record-collaboration", action="store_true")
     p.add_argument("--hypothesis")
     p.add_argument("--change")
     p.add_argument("--expected-result")
@@ -11051,7 +11097,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--result")
     p.add_argument("--decision")
     p.add_argument("--evidence-id", action="append", default=[])
+    p.add_argument("--artifact-ref", action="append", default=[])
     p.add_argument("--completed-criterion", action="append", default=[])
+    p.add_argument("--source-thread")
+    p.add_argument("--target-thread")
+    p.add_argument("--claim")
+    p.add_argument(
+        "--state-transition",
+        choices=[
+            "BLOCKED_WITH_EVIDENCE",
+            "DELIVERED",
+            "IMPLEMENTED",
+            "REVERTED_WITH_EVIDENCE",
+            "VALIDATED",
+        ],
+    )
     p.add_argument("--current-action")
     p.add_argument("--expected-evidence")
     p.add_argument("--judge", action="store_true")

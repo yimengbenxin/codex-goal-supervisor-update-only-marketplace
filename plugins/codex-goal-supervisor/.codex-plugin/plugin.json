@@ -1,6 +1,6 @@
 {
   "name": "codex-goal-supervisor",
-  "version": "2.3.6+codex.20260811151959",
+  "version": "2.4.0+codex.20260812025957",
   "description": "Execution convergence for long Codex loops: preserve goals, prove progress, recover, and finish with evidence",
   "author": {
     "name": "Codex Goal Supervisor contributors"
@@ -23,6 +23,8 @@
       "Optional bounded tickets",
       "Optional company roles, Custodian, Auditor, and mark-only Janitor",
       "Optional pinned specialist role library with exact upstream prompts",
+      "Optional industry-expert input for detailed Goal authoring",
+      "Evidence-bearing cross-thread collaboration liveness",
       "Versioned Git marketplace auto-update for new Codex sessions"
     ],
     "defaultPrompt": "Use Codex Goal Supervisor only where it creates net execution benefit; keep ordinary work unblocked."

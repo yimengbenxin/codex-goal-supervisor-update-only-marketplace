@@ -8,16 +8,31 @@ Coding Agents are entering the **Loop Era**. A useful task is no longer one prom
 
 That creates a new bottleneck. The limiting factor is no longer only whether a model can produce a good next action. It is whether thousands of individually plausible actions continue to converge on the same valuable outcome.
 
-Long-running trials repeatedly expose the same failure modes:
+Long-running work exposes failure modes that short benchmarks rarely measure:
 
-- a temporary request becomes the new center of gravity after context compaction;
-- file changes, commands, tokens, and subagents increase while acceptance evidence does not;
-- the Agent repeats a failed path without preserving what the failure already proved;
-- local improvements remain semantically related to the project but no longer advance the current milestone;
-- completion is claimed from activity or file existence instead of product-level verification;
-- control systems intended to prevent rework become a larger source of delay and noise than the work itself.
+- **A large objective never becomes an executable definition.** The Agent receives an ambitious outcome but no stable decomposition into stages, dependencies, concrete outputs, contribution to the goal, and product-level acceptance, so locally reasonable work has no reliable finish line.
+- **Business feasibility is postponed behind infrastructure.** The Agent can spend hours refining architecture, security, permissions, abstractions, or future extensibility before proving the smallest real user-facing loop works at all.
+- **The solution is built before the available path is understood.** Existing tools, prior implementations, and reusable project assets are discovered too late, after a custom framework has already created avoidable cost and lock-in.
+- **A plausible local direction becomes a treadmill.** Each new layer, refactor, framework, or hardening step looks related to the project, yet the current milestone and its acceptance evidence remain unchanged.
+- **A temporary request captures the run.** After context compaction or interruption, the most recent side request can become the new center of gravity even after that branch is already complete.
+- **Activity is mistaken for progress.** Files, commands, tokens, retries, and subagents accumulate while the number of satisfied success criteria does not.
+- **Failure does not become knowledge.** The Agent repeats an invalidated approach, reruns downstream checks after an upstream failure, or changes direction without preserving what the previous result already proved.
+- **Structural validity is mistaken for product validity.** A file exists, a build passes, or an artifact opens, but the actual workflow, visual quality, business behavior, or end-to-end user outcome has not been demonstrated.
+- **Exploration loses its return path.** Useful investigation expands into an unbounded branch instead of producing a decision, a reusable finding, or a return to the active milestone.
+- **Parallel work increases motion but not throughput.** Specialists duplicate reading, diverge on interfaces, or produce ceremonial handoffs when ownership, dependencies, and output contracts are unclear.
+- **Long reads consume the working context before conclusions are sealed.** Compaction then causes rereading, forgotten constraints, or decisions based mainly on the newest visible fragment.
+- **The execution model ignores the real project shape.** Runtime state, generated data, binary assets, CAD/BOM dependencies, batch outputs, and long external jobs cannot be judged as if every project were a small static source repository.
+- **The Agent keeps optimizing after the result is sufficient.** Completion becomes more files, more polish, or more architecture rather than a verified product result and a deliberate stop.
+- **Control itself can become the bottleneck.** Tickets, roles, audits, and repeated checks only help when the rework they prevent is greater than the delay, context, and coordination cost they introduce.
 
-These are convergence failures. A stronger model alone does not remove them, because the failure emerges across time, state transitions, interruptions, and accumulated local decisions.
+These are **convergence failures**. They are not solved by a stronger next-token decision alone, because they emerge across time, state transitions, interruptions, accumulated local choices, and changing evidence.
+
+The project therefore starts from three principles:
+
+1. **Prove the business loop first.** Establish the smallest real, runnable, end-to-end capability before broad architecture, comprehensive security, or generalized infrastructure. Apply only the minimum boundary needed to keep that proof authorized, contained, and reversible.
+2. **Turn intent into an evidence path.** Define the modules, dependencies, outputs, reuse choices, and acceptance that connect the current action to the final result.
+3. **Measure progress by evidence.** A task advances when a success criterion changes from unknown or failing to verified, not when the Agent produces more activity.
+4. **Spend control only where it creates net value.** Ordinary reversible work stays light. Stronger intervention is reserved for expensive repetition, unsupported completion claims, persistent deviation, and irreversible boundaries.
 
 ## Mission
 
@@ -29,7 +44,7 @@ Its long-term ambition is to make autonomous Agents dependable enough to carry m
 
 Its supreme rule is:
 
-> Every intervention must create net execution benefit. A control that costs more than the likely rework it prevents stays inactive.
+> Every action taken by the model and every supervisory intervention by this plugin must produce net execution benefit. Any action that may affect other modules without constraint or become noise for the entire project must be managed. If the cost of a control by this plugin exceeds the rework it can prevent, that control must remain inactive.
 
 ## What It Solves
 
@@ -37,6 +52,7 @@ Its supreme rule is:
 | --- | --- | --- |
 | The project gradually forgets why it exists | Preserve a concise, project-owned North Star | Durable direction across long execution |
 | A large objective is too vague to execute | Maintain a separate detailed Goal-mode contract with modules, dependencies, outputs, and acceptance | Concrete work without confusing the North Star with the plan |
+| The Agent builds before checking what can be reused | Probe existing tools and project history at plan inception or a material route change, then record an explicit reuse or rejection decision | Less reinvention without forcing research on every turn |
 | A temporary user request captures the loop | Track it as a bounded branch and restore the active Goal after completion or compaction | Temporary work ends instead of replaying for hours |
 | Activity is mistaken for progress | Track evidence-backed success criteria and convergence state separately from command/file counts | Progress means closer to acceptance, not merely busier |
 | The same failure or wrong direction continues | Keep persistent incidents, recheck continued affected-path work, and use a sparse read-only LLM Judge only at high-value ambiguity | Escalation is evidence-based and targeted |
@@ -83,6 +99,7 @@ flowchart TB
     UC -. "new sessions only" .-> CR
 
     FB["Local redacted feedback outbox"] -. "explicit project consent, full edition only" .-> FS["Feedback receiver"]
+    FS -. "optional server-only mirror" .-> GH["Private GitHub feedback archive"]
 ```
 
 The implementation adapts eight Codex hook lifecycle events, the Codex plugin skill surface, a timeout-bounded Codex CLI judgment path, versioned marketplace installation, and native macOS/Windows/Linux update schedulers. See [Codex integration architecture](docs/ARCHITECTURE.md) for the exact mapping and failure boundaries.
@@ -155,10 +172,12 @@ The convergence controller uses both layers. Explicit North Star anti-goals and 
 - **Custodian:** optional `request --text ...` analysis for meaningful goal/scope changes.
 - **Company roles:** optional independent specialist work. Zero roles is valid; missing optional receipts do not block delivery.
 - **Specialist role library:** an optional pinned Agency Agents catalog lets the main thread search and read complete expert prompts without making those profiles decision authorities or copying them into the user project.
+- **Expert-assisted Goal authoring:** an explicit `goal-brief` call may select one high-confidence industry expert to provide structured domain input. The main thread remains the sole Goal author; weak matches produce no expert injection.
 - **Auditor:** optional `check`; `close` remains strict only about truthful machine certification.
 - **Janitor:** optional MARK_ONLY artifact review. It cannot move or delete product files.
 - **Bounded tickets:** optional contracts when isolation, machine acceptance, or parallel ownership creates net benefit.
 - **Convergence:** optional `convergence` status and iteration records separate activity from evidence-backed progress and retain the latest recovery checkpoint.
+- **Collaboration liveness:** cross-thread praise and agreement never count as progress. Two evidence-free handoffs produce `CONSENSUS_WITHOUT_PROGRESS` and end mutual review in favor of execution, validation, or one concrete escalation.
 
 Normal product work is valid without an ACTIVE ticket.
 

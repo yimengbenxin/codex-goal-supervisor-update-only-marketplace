@@ -134,6 +134,8 @@ def search(pack: Path, manifest: dict[str, Any], query: str, division: str | Non
         }
         score = 0
         matched: set[str] = set()
+        matched_query_terms: set[str] = set()
+        strong_query_terms: set[str] = set()
         if phrase and phrase in fields["name"]:
             score += 40
             matched.add("name_phrase")
@@ -146,6 +148,9 @@ def search(pack: Path, manifest: dict[str, Any], query: str, division: str | Non
                 if term in fields[field]:
                     score += weight
                     matched.add(field)
+                    matched_query_terms.add(term)
+                    if field != "prompt":
+                        strong_query_terms.add(term)
         if score:
             results.append({
                 "id": row["id"],
@@ -155,10 +160,93 @@ def search(pack: Path, manifest: dict[str, Any], query: str, division: str | Non
                 "vibe": row.get("vibe", ""),
                 "score": score,
                 "matched_fields": sorted(matched),
+                "matched_query_terms": sorted(matched_query_terms),
+                "strong_query_terms": sorted(strong_query_terms),
                 "prompt_sha256": row["prompt_sha256"],
             })
     results.sort(key=lambda row: (-int(row["score"]), str(row["id"])))
     return results[: max(1, limit)]
+
+
+def goal_brief(
+    pack: Path,
+    manifest: dict[str, Any],
+    *,
+    query: str,
+    explicit_role: str | None,
+    auto_select: bool,
+) -> dict[str, Any]:
+    """Build a bounded expert-input contract without granting decision authority."""
+    candidates = search(pack, manifest, query, None, 3)
+    selected: dict[str, Any] | None = None
+    method = "none"
+    confidence = "none"
+    reason = "No expert role was requested."
+
+    if explicit_role:
+        selected = resolve_role(manifest, explicit_role)
+        method = "explicit_role"
+        confidence = "user_or_main_thread_selected"
+        reason = "An exact role was selected explicitly."
+    elif auto_select and candidates:
+        top = candidates[0]
+        runner_score = int(candidates[1]["score"]) if len(candidates) > 1 else 0
+        margin = int(top["score"]) - runner_score
+        strong_terms = list(top.get("strong_query_terms") or [])
+        if int(top["score"]) >= 20 and margin >= 5 and len(strong_terms) >= 2:
+            selected = resolve_role(manifest, str(top["id"]))
+            method = "high_confidence_lexical_candidate"
+            confidence = "high"
+            reason = (
+                "The leading role matched at least two task terms outside its raw prompt "
+                "and cleared the score and margin thresholds."
+            )
+        else:
+            reason = (
+                "No role cleared the bounded auto-selection threshold; continue without "
+                "expert injection or select one explicitly."
+            )
+
+    selected_payload = None
+    if selected:
+        selected_payload = {
+            key: selected.get(key)
+            for key in ("id", "division", "name", "description", "vibe", "prompt_file", "prompt_sha256")
+        }
+
+    return {
+        "status": "EXPERT_INPUT_READY" if selected else "NO_HIGH_CONFIDENCE_ROLE",
+        "task": query.strip(),
+        "selection": {
+            "method": method,
+            "confidence": confidence,
+            "reason": reason,
+            "selected_role": selected_payload,
+            "candidates": candidates,
+        },
+        "authority": "advisory_goal_input_only",
+        "goal_authoring_contract": {
+            "required_outputs": [
+                "domain_modules",
+                "critical_dependencies",
+                "domain_acceptance_evidence",
+                "known_failure_modes",
+                "reusable_tools",
+                "commercial_or_compliance_questions",
+                "assumptions_not_allowed",
+            ],
+            "expert_instruction": (
+                "Read the selected role prompt, analyze only the supplied task, and return "
+                "the required outputs as concise evidence-bound input for the Goal author."
+            ) if selected else None,
+            "merge_rules": [
+                "Preserve the user's words and confirmed North Star.",
+                "The main thread remains the sole Goal author and synthesis owner.",
+                "Expert input cannot alter acceptance, scope, company roster, or authority.",
+                "Omit any unsupported claim and expose commercial or compliance questions to the user.",
+            ],
+        },
+    }
 
 
 def verify(pack: Path, manifest: dict[str, Any]) -> dict[str, Any]:
@@ -235,6 +323,14 @@ def main(argv: list[str] | None = None) -> int:
     show_parser.add_argument("--role", required=True)
     show_parser.add_argument("--format", choices=["raw", "json", "path"], default="raw")
 
+    goal_parser = sub.add_parser(
+        "goal-brief",
+        help="Prepare optional task-specific expert input for the main Goal author.",
+    )
+    goal_parser.add_argument("--query", required=True)
+    goal_parser.add_argument("--role")
+    goal_parser.add_argument("--auto-select", action="store_true")
+
     args = parser.parse_args(argv)
     pack = resolve_pack(args.pack)
     try:
@@ -285,6 +381,17 @@ def main(argv: list[str] | None = None) -> int:
                 print(path)
             else:
                 print_json({"metadata": row, "prompt": path.read_text(encoding="utf-8")})
+            return 0
+        if args.command == "goal-brief":
+            if not args.role and not args.auto_select:
+                raise ValueError("goal-brief requires --role or --auto-select")
+            print_json(goal_brief(
+                pack,
+                manifest,
+                query=args.query,
+                explicit_role=args.role,
+                auto_select=bool(args.auto_select),
+            ))
             return 0
     except (OSError, ValueError, json.JSONDecodeError, verified_asset.AssetError) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False), file=sys.stderr)

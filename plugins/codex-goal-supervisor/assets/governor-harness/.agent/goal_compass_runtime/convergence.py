@@ -14,9 +14,17 @@ from typing import Any
 SCHEMA_VERSION = "1.0"
 MAX_ITERATIONS = 64
 MAX_EVIDENCE = 128
+MAX_COLLABORATION_ROUNDS = 32
 MAX_GOAL_MODULES = 16
 MAX_GOAL_LIST_ITEMS = 8
 MAX_GOAL_TEXT = 360
+COLLABORATION_PROGRESS_TRANSITIONS = {
+    "BLOCKED_WITH_EVIDENCE",
+    "DELIVERED",
+    "IMPLEMENTED",
+    "REVERTED_WITH_EVIDENCE",
+    "VALIDATED",
+}
 
 
 def empty_state() -> dict[str, Any]:
@@ -58,6 +66,13 @@ def empty_state() -> dict[str, Any]:
         },
         "evidence": [],
         "iterations": [],
+        "collaboration": {
+            "rounds": [],
+            "no_evidence_rounds": 0,
+            "status": "IDLE",
+            "required_action": "none",
+            "last_round": None,
+        },
         "recovery": {
             "latest_checkpoint": None,
             "blocked_reason": None,
@@ -384,6 +399,93 @@ def record_iteration(
     return row
 
 
+def record_collaboration_round(
+    state: dict[str, Any] | None,
+    *,
+    source: str,
+    target: str,
+    claim: str,
+    evidence_ids: list[str],
+    artifact_refs: list[str],
+    state_transition: str | None,
+    observed_at: str,
+) -> dict[str, Any]:
+    """Record cross-thread progress while refusing praise or agreement as evidence."""
+    row = copy.deepcopy(state or empty_state())
+    transition = str(state_transition or "").strip().upper()
+    accepted_transition = transition if transition in COLLABORATION_PROGRESS_TRANSITIONS else None
+    unique_evidence = list(dict.fromkeys(value for value in _strings(evidence_ids)))[:20]
+    unique_artifacts = list(dict.fromkeys(value for value in _strings(artifact_refs)))[:20]
+    progress_made = bool(unique_evidence or unique_artifacts or accepted_transition)
+    round_row = {
+        "round_id": hashlib.sha256(
+            (observed_at + source + target + claim).encode("utf-8")
+        ).hexdigest()[:16],
+        "source": _bounded_text(source),
+        "target": _bounded_text(target),
+        "claim": _bounded_text(claim),
+        "evidence_ids": unique_evidence,
+        "artifact_refs": unique_artifacts,
+        "state_transition": accepted_transition,
+        "progress_made": progress_made,
+        "observed_at": observed_at,
+    }
+    collaboration = row.setdefault("collaboration", copy.deepcopy(empty_state()["collaboration"]))
+    rounds = [item for item in collaboration.get("rounds", []) if isinstance(item, dict)]
+    rounds.append(round_row)
+    collaboration["rounds"] = rounds[-MAX_COLLABORATION_ROUNDS:]
+    collaboration["last_round"] = round_row
+
+    progress = row.setdefault("progress", {})
+    recovery = row.setdefault("recovery", {})
+    if progress_made:
+        collaboration["no_evidence_rounds"] = 0
+        collaboration["status"] = "EVIDENCE_PROGRESS"
+        collaboration["required_action"] = "continue_from_new_evidence"
+        progress["no_progress_iterations"] = 0
+        progress["last_progress_at"] = observed_at
+        evidence = [item for item in row.get("evidence", []) if isinstance(item, dict)]
+        known = {str(item.get("evidence_id")) for item in evidence}
+        evidence_values = list(unique_evidence)
+        evidence_values.extend(
+            "collaboration-artifact:" + hashlib.sha256(value.encode("utf-8")).hexdigest()[:20]
+            for value in unique_artifacts
+        )
+        if accepted_transition:
+            evidence_values.append(
+                "collaboration-transition:"
+                + hashlib.sha256((accepted_transition + claim).encode("utf-8")).hexdigest()[:20]
+            )
+        for evidence_id in evidence_values:
+            if evidence_id in known:
+                continue
+            evidence.append({
+                "evidence_id": evidence_id,
+                "kind": "collaboration_progress",
+                "summary": _bounded_text(claim),
+                "observed_at": observed_at,
+            })
+            known.add(evidence_id)
+        row["evidence"] = evidence[-MAX_EVIDENCE:]
+        progress["evidence_count"] = len(row["evidence"])
+        progress["last_evidence_at"] = observed_at
+        recovery["blocked_reason"] = None
+        recovery["recommended_action"] = "select_highest_value_action"
+    else:
+        count = int(collaboration.get("no_evidence_rounds", 0) or 0) + 1
+        collaboration["no_evidence_rounds"] = count
+        if count >= 2:
+            collaboration["status"] = "CONSENSUS_WITHOUT_PROGRESS"
+            collaboration["required_action"] = "stop_mutual_review_and_execute_validate_or_escalate"
+            recovery["blocked_reason"] = "two_collaboration_rounds_without_new_evidence"
+            recovery["recommended_action"] = "execute_validate_or_escalate_one_concrete_blocker"
+        else:
+            collaboration["status"] = "NO_EVIDENCE_WARNING"
+            collaboration["required_action"] = "produce_evidence_or_execute"
+    row["updated_at"] = observed_at
+    return row
+
+
 def judge_trigger(
     state: dict[str, Any] | None,
     *,
@@ -432,6 +534,7 @@ def compact_status(state: dict[str, Any] | None) -> dict[str, Any]:
     if contract.get("execution_plan_ref"):
         contract_summary["execution_plan_ref"] = contract.get("execution_plan_ref")
     stack["goal_contract"] = contract_summary
+    collaboration = row.get("collaboration") if isinstance(row.get("collaboration"), dict) else {}
     return {
         "goal_stack": stack,
         "progress": {
@@ -448,6 +551,12 @@ def compact_status(state: dict[str, Any] | None) -> dict[str, Any]:
             "last_activity_at": activity.get("last_activity_at"),
         },
         "latest_iteration": latest,
+        "collaboration": {
+            "status": collaboration.get("status", "IDLE"),
+            "no_evidence_rounds": int(collaboration.get("no_evidence_rounds", 0) or 0),
+            "required_action": collaboration.get("required_action", "none"),
+            "last_round": collaboration.get("last_round"),
+        },
         "recovery": row.get("recovery", {}),
         "judge": row.get("judge", {}),
         "goal_completion": row.get("goal_completion", empty_state()["goal_completion"]),

@@ -13,6 +13,29 @@ The system keeps four concerns separate:
 
 The user and the execution Agent remain the decision makers. Goal Supervisor is the project-scoped administrative layer.
 
+Every action taken by the model and every supervisory intervention by this plugin must produce net execution benefit. Any action that may affect other modules without constraint or become noise for the entire project must be managed. If the cost of a control by this plugin exceeds the rework it can prevent, that control must remain inactive.
+
+## Problem Model
+
+The architecture is designed around failure patterns that emerge only during sustained execution. They are product and execution problems, not merely prompt-quality problems.
+
+| Convergence problem | Architectural response |
+| --- | --- |
+| A system-level objective has no executable stages, dependencies, outputs, or finish line | Separate the durable North Star from a detailed Goal contract and connect L0-L3 intent to the current action |
+| Architecture, security, governance, or extensibility grows before the smallest business loop is proven | Keep the North Star tied to the user outcome, make the current Goal contract concrete, and treat broad infrastructure as optional until the end-to-end path has evidence |
+| Custom infrastructure is built before existing tools and project assets are evaluated | Run bounded reuse discovery at plan inception or material route changes, then make adoption or evidence-backed rejection explicit |
+| Many actions occur but no success criterion changes | Keep activity counters separate from evidence-backed convergence state |
+| A temporary prompt becomes the durable objective after compaction | Track bounded branches, seal a return target before compaction, and tombstone completed temporary work |
+| A failed approach is repeated or downstream validation continues after an upstream blocker | Preserve failure conclusions and dependency-aware evidence so the next action can repair, retry, or skip blocked work |
+| Locally relevant work no longer advances the current milestone | Align against both the durable North Star and the concrete Goal module, output, and acceptance currently in force |
+| Files or technical checks pass while the product remains unusable | Separate implementation evidence from project-level end-to-end certification |
+| Large reads consume context before a conclusion is emitted | Use bounded metadata capsules, staged conclusions, and optional read-only subagents for genuinely separable material |
+| Parallel specialists create duplicate work or incompatible outputs | Use task-shaped roles only when ownership, dependencies, and output contracts make parallelism cheaper than serial work |
+| Runtime files, generated assets, binary deliverables, or long jobs look like source drift | Keep project-owned tracking contracts and runtime/generated boundaries instead of assuming every artifact is source text |
+| The control process costs more than the expected rework | Keep the background observer silent, make advanced capabilities optional, and escalate only on concrete high-value signals |
+
+The ordering is deliberate: **real business capability first, the minimum effective boundary second, broader technical and security strengthening after the business loop is verified**. Safety and engineering controls must preserve the path to a runnable result rather than replace it.
+
 ## Codex Adaptation Map
 
 | Codex surface | Goal Supervisor adaptation | Purpose | Boundary |
@@ -29,6 +52,7 @@ The user and the execution Agent remain the decision makers. Goal Supervisor is 
 | Codex CLI | Invoke a sparse, read-only structured LLM Judge with timeout and caching | Review high-value ambiguity before a targeted rail | Not resident; malformed, unavailable, or timed-out judgment fails open |
 | Codex Goal mode | Maintain a detailed execution contract separate from the one-sentence North Star | Give the long loop concrete modules, dependencies, outputs, and acceptance | Goal Supervisor is not written into the product objective |
 | Codex marketplace | Publish separate full and update-only Git channels into the versioned Codex cache | Make updates reproducible without cross-edition capability drift | Updater refuses downgrade and cross-edition replacement |
+| Optional private GitHub feedback archive | Mirror only server-validated sanitized events in bounded batches | Centralize maintainer triage without distributing write credentials | Clients never talk to GitHub with write authority; mirror failure retains SQLite state |
 | Native device schedulers | Use LaunchAgent, Task Scheduler, or systemd user timer for a low-priority update check | Keep installed versions current without project hooks doing network work | Update checks never activate a project or alter project state |
 
 ## Runtime Flow

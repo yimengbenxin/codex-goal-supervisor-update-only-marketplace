@@ -64,4 +64,4 @@ Feedback is local-only by default. Upload requires explicit project-level consen
 
 ## Supreme Rule
 
-Every intervention must create net execution benefit. Skip any ticket, role, scan, or audit whose likely process cost exceeds the rework it prevents.
+Every action taken by the model and every supervisory intervention by this plugin must produce net execution benefit. Any action that may affect other modules without constraint or become noise for the entire project must be managed. If the cost of a control by this plugin exceeds the rework it can prevent, that control must remain inactive.
