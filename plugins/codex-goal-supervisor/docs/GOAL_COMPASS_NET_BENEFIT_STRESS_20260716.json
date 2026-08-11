@@ -1,0 +1,1684 @@
+{
+  "schema_version": 1,
+  "plugin_version": "0.1.0+codex.20260715160604",
+  "duration_seconds": 11.033,
+  "passed": true,
+  "scenario_count": 12,
+  "results": [
+    {
+      "scenario": "runtime_sqlite_attribution",
+      "duration_seconds": 1.228,
+      "passed": true,
+      "actual": {
+        "status": "IMPLEMENTATION_PASS_ENVIRONMENT_DIRTY",
+        "reasons": [],
+        "suggested_action": "close_with_environment_note",
+        "quality": {
+          "status": "PASS",
+          "technical_pass": "NOT_REQUIRED",
+          "artifact_quality_pass": "NOT_REQUIRED",
+          "product_pass": "NOT_REQUIRED",
+          "market_pass": "NOT_REQUIRED",
+          "gates": [],
+          "blockers": []
+        },
+        "environment_status": "DIRTY_RUNTIME_ONLY",
+        "environment_advisories": [
+          "runtime paths changed outside the implementation diff: var/runtime.sqlite"
+        ],
+        "prune_check": {
+          "status": "NOT_REQUIRED",
+          "scope": "current-ticket",
+          "files_scanned": 0,
+          "noise_score": 0.0,
+          "reasons": [],
+          "advisories": [],
+          "required_action": "continue",
+          "ticket_noise_status": "NOT_REQUIRED",
+          "repository_hygiene_status": "NOT_SCANNED",
+          "supervision_level": "STANDARD",
+          "net_benefit_reason": "No changed-path signal justified a bounded Janitor scan."
+        },
+        "close_readiness": {
+          "machine_acceptance_ready": true,
+          "company_runtime_complete": true,
+          "janitor_clear": true
+        },
+        "mdcp": {
+          "protocol_version": "1.0",
+          "acceptance_consumer": "machine file/assertion check",
+          "scope_anchor": [
+            "Keep the bounded output valid while the service database advances.",
+            "src/result.txt",
+            "current acceptance only"
+          ],
+          "company_subagents": {
+            "required": false,
+            "plan_status": "NO_SUBAGENT_NEEDED",
+            "complexity_tier": "T1_STANDARD",
+            "required_roles": [],
+            "min_subagents": 0,
+            "runtime_binding": "not_required",
+            "missing_roles": [],
+            "runtime_execution_verified": true,
+            "receipt_count": 0,
+            "preserved_roles": [],
+            "invalidated_roles": []
+          },
+          "layer_3_janitor_auditor": {
+            "auditor": {
+              "status": "IMPLEMENTATION_PASS_ENVIRONMENT_DIRTY",
+              "blocking_reasons": [],
+              "advisories": [
+                "runtime paths changed outside the implementation diff: var/runtime.sqlite"
+              ],
+              "required_action": "close",
+              "acceptance_consumer_check": "pass",
+              "scope_anchor_check": "pass",
+              "axis_fatigue_check": "none",
+              "precision_mismatch_check": "none"
+            }
+          },
+          "layer_3_pass_criteria": {
+            "janitor_checked": true,
+            "auditor_checked": true,
+            "no_artifact_sprawl_blocker": true,
+            "validation_not_failed": true,
+            "acceptance_consumer_known": true,
+            "scope_anchor_not_violated": true,
+            "unresolved_axis_fatigue_not_strong": true,
+            "close_requires_validation_pass": true,
+            "company_runtime_complete": true
+          }
+        },
+        "axis_advisory": {
+          "status": "OK",
+          "reason": "not enough recent tickets for axis-fatigue signal"
+        },
+        "supervision": {
+          "level": "STANDARD",
+          "ticket_required": true,
+          "controls": [
+            "scope_boundary",
+            "machine_acceptance",
+            "risk_adaptive_company",
+            "close_validation"
+          ],
+          "company_mode": "required_if_independent_deliverable",
+          "janitor_mode": "not_required",
+          "intermediate_check": "on_demand",
+          "reason": "The ticket has meaningful implementation or cross-function risk, while only targeted controls are justified.",
+          "net_benefit": {
+            "decision": "APPLY_TARGETED",
+            "basis": [
+              "meaningful implementation risk",
+              "bounded acceptance reduces rework",
+              "deep audit omitted",
+              "no cleanup or broad-change signal; Janitor omitted"
+            ],
+            "rule": "Activate a control only when its expected rework reduction exceeds its execution and coordination cost."
+          },
+          "complexity_tier": "T1_STANDARD",
+          "breadth": "B1_FOCUSED"
+        }
+      },
+      "expected": "IMPLEMENTATION_PASS_ENVIRONMENT_DIRTY for service-owned SQLite churn"
+    },
+    {
+      "scenario": "complete_word_scope",
+      "duration_seconds": 0.424,
+      "passed": true,
+      "actual": {
+        "non_goal_warning": [],
+        "scope_sink_risk": "none"
+      },
+      "expected": "ordinary 'Complete the test' is not heavy scope"
+    },
+    {
+      "scenario": "negative_semantics",
+      "duration_seconds": 0.441,
+      "passed": true,
+      "actual": {
+        "src/quality/status.css": {
+          "artifact": "src/quality/status.css",
+          "classification": "REVIEW_REQUIRED",
+          "reason": "No strong positive or negative mapping; human review is required.",
+          "confidence": 0.3,
+          "delete_safe": false,
+          "north_star_mapping": null,
+          "current_ticket_mapping": null,
+          "signals": [
+            "unmapped_artifact"
+          ],
+          "evidence": [
+            "no_strong_mapping"
+          ],
+          "evidence_tier": "AMBIGUOUS",
+          "janitor_action_limit": "MARK_ONLY",
+          "reference_count": 0
+        },
+        "tests/test_quality.py": {
+          "artifact": "tests/test_quality.py",
+          "classification": "REVIEW_REQUIRED",
+          "reason": "No strong positive or negative mapping; human review is required.",
+          "confidence": 0.3,
+          "delete_safe": false,
+          "north_star_mapping": null,
+          "current_ticket_mapping": null,
+          "signals": [
+            "unmapped_artifact"
+          ],
+          "evidence": [
+            "no_strong_mapping"
+          ],
+          "evidence_tier": "AMBIGUOUS",
+          "janitor_action_limit": "MARK_ONLY",
+          "reference_count": 0
+        }
+      },
+      "expected": "CSS negative state and negative assertions are not scope violations"
+    },
+    {
+      "scenario": "validation_cache",
+      "duration_seconds": 1.315,
+      "passed": true,
+      "actual": {
+        "check": {
+          "status": "PASS_READY",
+          "reasons": [],
+          "suggested_action": "close",
+          "validation": {
+            "status": "PASS",
+            "cache_hit": false,
+            "input_fingerprint": "8599cea07ea6f5ba905c271581c18ca1e79bc0bbea8a39b5630dc1e1c979f919",
+            "validated_at": "2026-07-15T18:28:16+00:00",
+            "root_cause": null,
+            "executed_ids": [
+              "count_once"
+            ],
+            "skipped_ids": [],
+            "suppressed_cascade_count": 0,
+            "cleanup_warnings": []
+          },
+          "quality": {
+            "status": "PASS",
+            "technical_pass": "NOT_REQUIRED",
+            "artifact_quality_pass": "NOT_REQUIRED",
+            "product_pass": "NOT_REQUIRED",
+            "market_pass": "NOT_REQUIRED",
+            "gates": [],
+            "blockers": []
+          },
+          "prune_check": {
+            "status": "NOT_REQUIRED",
+            "scope": "current-ticket",
+            "files_scanned": 0,
+            "noise_score": 0.0,
+            "reasons": [],
+            "advisories": [],
+            "required_action": "continue",
+            "ticket_noise_status": "NOT_REQUIRED",
+            "repository_hygiene_status": "NOT_SCANNED",
+            "supervision_level": "STANDARD",
+            "net_benefit_reason": "No changed-path signal justified a bounded Janitor scan."
+          },
+          "close_readiness": {
+            "machine_acceptance_ready": true,
+            "company_runtime_complete": true,
+            "janitor_clear": true
+          },
+          "mdcp": {
+            "protocol_version": "1.0",
+            "acceptance_consumer": "validation_catalog",
+            "scope_anchor": [
+              "Validate the registry result exactly once when inputs are unchanged.",
+              "src/registry.txt",
+              "current acceptance only"
+            ],
+            "company_subagents": {
+              "required": false,
+              "plan_status": "NO_SUBAGENT_NEEDED",
+              "complexity_tier": "T1_STANDARD",
+              "required_roles": [],
+              "min_subagents": 0,
+              "runtime_binding": "not_required",
+              "missing_roles": [],
+              "runtime_execution_verified": true,
+              "receipt_count": 0,
+              "preserved_roles": [],
+              "invalidated_roles": []
+            },
+            "layer_3_janitor_auditor": {
+              "auditor": {
+                "status": "PASS_READY",
+                "blocking_reasons": [],
+                "advisories": [],
+                "required_action": "close",
+                "acceptance_consumer_check": "pass",
+                "scope_anchor_check": "pass",
+                "axis_fatigue_check": "none",
+                "precision_mismatch_check": "none"
+              }
+            },
+            "layer_3_pass_criteria": {
+              "janitor_checked": true,
+              "auditor_checked": true,
+              "no_artifact_sprawl_blocker": true,
+              "validation_not_failed": true,
+              "acceptance_consumer_known": true,
+              "scope_anchor_not_violated": true,
+              "unresolved_axis_fatigue_not_strong": true,
+              "close_requires_validation_pass": true,
+              "company_runtime_complete": true
+            }
+          },
+          "axis_advisory": {
+            "status": "OK",
+            "reason": "not enough recent tickets for axis-fatigue signal"
+          },
+          "supervision": {
+            "level": "STANDARD",
+            "ticket_required": true,
+            "controls": [
+              "scope_boundary",
+              "machine_acceptance",
+              "risk_adaptive_company",
+              "close_validation"
+            ],
+            "company_mode": "required_if_independent_deliverable",
+            "janitor_mode": "not_required",
+            "intermediate_check": "on_demand",
+            "reason": "The ticket has meaningful implementation or cross-function risk, while only targeted controls are justified.",
+            "net_benefit": {
+              "decision": "APPLY_TARGETED",
+              "basis": [
+                "meaningful implementation risk",
+                "bounded acceptance reduces rework",
+                "deep audit omitted",
+                "no cleanup or broad-change signal; Janitor omitted"
+              ],
+              "rule": "Activate a control only when its expected rework reduction exceeds its execution and coordination cost."
+            },
+            "complexity_tier": "T1_STANDARD",
+            "breadth": "B1_FOCUSED"
+          }
+        },
+        "close": {
+          "status": "PASS",
+          "ticket": ".agent/tickets/done/CACHE-001.json",
+          "validation": {
+            "status": "PASS",
+            "cache_hit": true,
+            "input_fingerprint": "8599cea07ea6f5ba905c271581c18ca1e79bc0bbea8a39b5630dc1e1c979f919",
+            "validated_at": "2026-07-15T18:28:16+00:00",
+            "reused_at": "2026-07-15T18:28:16+00:00",
+            "root_cause": null,
+            "executed_ids": [],
+            "skipped_ids": [],
+            "suppressed_cascade_count": 0
+          },
+          "quality": {
+            "status": "PASS",
+            "technical_pass": "NOT_REQUIRED",
+            "artifact_quality_pass": "NOT_REQUIRED",
+            "product_pass": "NOT_REQUIRED",
+            "market_pass": "NOT_REQUIRED",
+            "gates": [],
+            "blockers": []
+          },
+          "environment_status": null,
+          "program_phase": null,
+          "mdcp": {
+            "protocol_version": "1.0",
+            "acceptance_consumer": "validation_catalog",
+            "scope_anchor": [
+              "Validate the registry result exactly once when inputs are unchanged.",
+              "src/registry.txt",
+              "current acceptance only"
+            ],
+            "company_subagents": {
+              "required": false,
+              "plan_status": "NO_SUBAGENT_NEEDED",
+              "complexity_tier": "T1_STANDARD",
+              "required_roles": [],
+              "min_subagents": 0,
+              "runtime_binding": "not_required",
+              "missing_roles": [],
+              "runtime_execution_verified": true,
+              "receipt_count": 0,
+              "preserved_roles": [],
+              "invalidated_roles": []
+            },
+            "layer_3_janitor_auditor": {
+              "auditor": {
+                "status": "PASS_READY",
+                "blocking_reasons": [],
+                "advisories": [],
+                "required_action": "close",
+                "acceptance_consumer_check": "pass",
+                "scope_anchor_check": "pass",
+                "axis_fatigue_check": "none",
+                "precision_mismatch_check": "none"
+              }
+            },
+            "layer_3_pass_criteria": {
+              "janitor_checked": true,
+              "auditor_checked": true,
+              "no_artifact_sprawl_blocker": true,
+              "validation_not_failed": true,
+              "acceptance_consumer_known": true,
+              "scope_anchor_not_violated": true,
+              "unresolved_axis_fatigue_not_strong": true,
+              "close_requires_validation_pass": true,
+              "company_runtime_complete": true
+            }
+          },
+          "supervision": {
+            "level": "STANDARD",
+            "ticket_required": true,
+            "controls": [
+              "scope_boundary",
+              "machine_acceptance",
+              "risk_adaptive_company",
+              "close_validation"
+            ],
+            "company_mode": "required_if_independent_deliverable",
+            "janitor_mode": "not_required",
+            "intermediate_check": "on_demand",
+            "reason": "The ticket has meaningful implementation or cross-function risk, while only targeted controls are justified.",
+            "net_benefit": {
+              "decision": "APPLY_TARGETED",
+              "basis": [
+                "meaningful implementation risk",
+                "bounded acceptance reduces rework",
+                "deep audit omitted",
+                "no cleanup or broad-change signal; Janitor omitted"
+              ],
+              "rule": "Activate a control only when its expected rework reduction exceeds its execution and coordination cost."
+            },
+            "complexity_tier": "T1_STANDARD",
+            "breadth": "B1_FOCUSED"
+          }
+        },
+        "validation_count": "1"
+      },
+      "expected": "close reuses unchanged passing validation"
+    },
+    {
+      "scenario": "upstream_evidence",
+      "duration_seconds": 0.854,
+      "passed": true,
+      "actual": {
+        "status": "UPSTREAM_EVIDENCE_INVALID",
+        "reasons": [
+          "read dependency changed after ticket start: foundation/evidence.json"
+        ],
+        "suggested_action": "supersede_or_rebaseline_upstream",
+        "failure_class": "BLOCKED_BY_UPSTREAM",
+        "quality": {
+          "status": "PASS",
+          "technical_pass": "NOT_REQUIRED",
+          "artifact_quality_pass": "NOT_REQUIRED",
+          "product_pass": "NOT_REQUIRED",
+          "market_pass": "NOT_REQUIRED",
+          "gates": [],
+          "blockers": []
+        },
+        "prune_check": {
+          "status": "NOT_REQUIRED",
+          "scope": "current-ticket",
+          "files_scanned": 0,
+          "noise_score": 0.0,
+          "reasons": [],
+          "advisories": [],
+          "required_action": "continue",
+          "ticket_noise_status": "NOT_REQUIRED",
+          "repository_hygiene_status": "NOT_SCANNED",
+          "supervision_level": "STANDARD",
+          "net_benefit_reason": "No changed-path signal justified a bounded Janitor scan."
+        },
+        "close_readiness": {
+          "machine_acceptance_ready": false,
+          "company_runtime_complete": true,
+          "janitor_clear": true
+        },
+        "mdcp": {
+          "protocol_version": "1.0",
+          "acceptance_consumer": "machine file/assertion check",
+          "scope_anchor": [
+            "Keep the summary tied to frozen upstream evidence.",
+            "src/summary.txt",
+            "current acceptance only"
+          ],
+          "company_subagents": {
+            "required": false,
+            "plan_status": "NO_SUBAGENT_NEEDED",
+            "complexity_tier": "T1_STANDARD",
+            "required_roles": [],
+            "min_subagents": 0,
+            "runtime_binding": "not_required",
+            "missing_roles": [],
+            "runtime_execution_verified": true,
+            "receipt_count": 0,
+            "preserved_roles": [],
+            "invalidated_roles": []
+          },
+          "layer_3_janitor_auditor": {
+            "auditor": {
+              "status": "UPSTREAM_EVIDENCE_INVALID",
+              "blocking_reasons": [
+                "read dependency changed after ticket start: foundation/evidence.json"
+              ],
+              "advisories": [],
+              "required_action": "supersede_or_rebaseline_upstream",
+              "acceptance_consumer_check": "pass",
+              "scope_anchor_check": "pass",
+              "axis_fatigue_check": "none",
+              "precision_mismatch_check": "none"
+            }
+          },
+          "layer_3_pass_criteria": {
+            "janitor_checked": true,
+            "auditor_checked": true,
+            "no_artifact_sprawl_blocker": true,
+            "validation_not_failed": true,
+            "acceptance_consumer_known": true,
+            "scope_anchor_not_violated": true,
+            "unresolved_axis_fatigue_not_strong": true,
+            "close_requires_validation_pass": false,
+            "company_runtime_complete": true
+          }
+        },
+        "axis_advisory": {
+          "status": "OK",
+          "reason": "not enough recent tickets for axis-fatigue signal"
+        },
+        "supervision": {
+          "level": "STANDARD",
+          "ticket_required": true,
+          "controls": [
+            "scope_boundary",
+            "machine_acceptance",
+            "risk_adaptive_company",
+            "close_validation"
+          ],
+          "company_mode": "required_if_independent_deliverable",
+          "janitor_mode": "not_required",
+          "intermediate_check": "on_demand",
+          "reason": "The ticket has meaningful implementation or cross-function risk, while only targeted controls are justified.",
+          "net_benefit": {
+            "decision": "APPLY_TARGETED",
+            "basis": [
+              "meaningful implementation risk",
+              "bounded acceptance reduces rework",
+              "deep audit omitted",
+              "no cleanup or broad-change signal; Janitor omitted"
+            ],
+            "rule": "Activate a control only when its expected rework reduction exceeds its execution and coordination cost."
+          },
+          "complexity_tier": "T1_STANDARD",
+          "breadth": "B1_FOCUSED"
+        }
+      },
+      "expected": "upstream premise invalidation is not DRIFT"
+    },
+    {
+      "scenario": "bilingual_request",
+      "duration_seconds": 0.748,
+      "passed": true,
+      "actual": {
+        "english": {
+          "request": "Review and fix the current parser validation behavior",
+          "verdict": "ACCEPT_AS_IS",
+          "north_star_mapping": "Maintain a small parser with focused validation coverage.",
+          "goal_mapping": [
+            "current_ticket.acceptance"
+          ],
+          "accepted_intent": "Review and fix the current parser validation behavior",
+          "minimal_action": "Apply only the smallest change that directly serves current acceptance.",
+          "rejected_scope": [],
+          "backlog_items": [],
+          "reason": "Request directly advances current acceptance or must_do without expanding scope.",
+          "allowed_current_change": true,
+          "operation_class": "product_edit",
+          "north_star_alignment": "PARTIAL",
+          "active_ticket": {
+            "ticket_id": "REQUEST-001",
+            "status": "ACTIVE",
+            "acceptance_fingerprint": "9075df03635eb0326e696dc0b647c171d28aefb299d19a281194b1e1796f96fa"
+          },
+          "ticket_scope_alignment": "MAPPED",
+          "read_only_allowed": false,
+          "planning_allowed": false,
+          "product_edit_allowed": true,
+          "requires_new_ticket": false,
+          "program_phase": null,
+          "mdcp": {
+            "protocol_version": "1.0",
+            "layer_1_structured_expression": {
+              "north_star_goal": "Maintain a small parser with focused validation coverage.",
+              "goal_definition_quality": "TEXT_ONLY",
+              "precise_goal": "Maintain a small parser with focused validation coverage.",
+              "problem_statement": "Maintain a small parser with focused validation coverage.",
+              "first_principles": [],
+              "process_nodes": [],
+              "goal_deliverables": [],
+              "goal_final_acceptance": [],
+              "goal_anchor": "Fix parser validation behavior.",
+              "scope_anchor": [
+                "Fix parser validation behavior.",
+                "src/parser.py",
+                "tests/**",
+                "current acceptance only"
+              ],
+              "conversation_plane": "spec",
+              "precision_level": "high",
+              "time_cost_signal": "low",
+              "value_signal": "high",
+              "metacognition_lock_signal": "none",
+              "loop_risk": "none",
+              "consumer_mismatch_risk": "none",
+              "acceptance_consumer": "machine file/assertion check",
+              "scope_sink_risk": "none"
+            },
+            "layer_2_company_roles": {
+              "custodian": {
+                "request_verdict": "ACCEPT_AS_IS",
+                "accepted_intent": "Review and fix the current parser validation behavior",
+                "minimal_action": "Apply only the smallest change that directly serves current acceptance.",
+                "rejected_scope": [],
+                "backlog_items": []
+              }
+            },
+            "precision_level": "high",
+            "conversation_plane": "spec",
+            "scope_anchor": [
+              "Fix parser validation behavior.",
+              "src/parser.py",
+              "tests/**",
+              "current acceptance only"
+            ],
+            "time_cost_signal": "low",
+            "value_signal": "high",
+            "consumer_mismatch_risk": "none",
+            "scope_sink_risk": "none"
+          },
+          "ts": "2026-07-15T18:28:18+00:00",
+          "provenance": {
+            "decision_id": "3aafee6554dcae0dec18",
+            "router_version": "2.0",
+            "runtime_sha256": "8b8f6bcf39810b42b573373a70580af50f5743162a8a40c8863c7d97cf0974ca",
+            "north_star_hash": "d8404a13c5c2578045c39fe4fe0a70d50f63c1715095d45e6cdbecfa2b524c6f",
+            "north_star_contract_version": "1.2",
+            "program_phase_id": null,
+            "active_ticket_id": "REQUEST-001",
+            "active_ticket_status": "ACTIVE",
+            "acceptance_fingerprint": "9075df03635eb0326e696dc0b647c171d28aefb299d19a281194b1e1796f96fa"
+          }
+        },
+        "chinese": {
+          "request": "检查并修复当前解析器验证行为",
+          "verdict": "ACCEPT_AS_IS",
+          "north_star_mapping": "Maintain a small parser with focused validation coverage.",
+          "goal_mapping": [
+            "current_ticket.acceptance"
+          ],
+          "accepted_intent": "检查并修复当前解析器验证行为",
+          "minimal_action": "Apply only the smallest change that directly serves current acceptance.",
+          "rejected_scope": [],
+          "backlog_items": [],
+          "reason": "Request directly advances current acceptance or must_do without expanding scope.",
+          "allowed_current_change": true,
+          "operation_class": "product_edit",
+          "north_star_alignment": "PARTIAL",
+          "active_ticket": {
+            "ticket_id": "REQUEST-001",
+            "status": "ACTIVE",
+            "acceptance_fingerprint": "9075df03635eb0326e696dc0b647c171d28aefb299d19a281194b1e1796f96fa"
+          },
+          "ticket_scope_alignment": "MAPPED",
+          "read_only_allowed": false,
+          "planning_allowed": false,
+          "product_edit_allowed": true,
+          "requires_new_ticket": false,
+          "program_phase": null,
+          "mdcp": {
+            "protocol_version": "1.0",
+            "layer_1_structured_expression": {
+              "north_star_goal": "Maintain a small parser with focused validation coverage.",
+              "goal_definition_quality": "TEXT_ONLY",
+              "precise_goal": "Maintain a small parser with focused validation coverage.",
+              "problem_statement": "Maintain a small parser with focused validation coverage.",
+              "first_principles": [],
+              "process_nodes": [],
+              "goal_deliverables": [],
+              "goal_final_acceptance": [],
+              "goal_anchor": "Fix parser validation behavior.",
+              "scope_anchor": [
+                "Fix parser validation behavior.",
+                "src/parser.py",
+                "tests/**",
+                "current acceptance only"
+              ],
+              "conversation_plane": "spec",
+              "precision_level": "high",
+              "time_cost_signal": "low",
+              "value_signal": "high",
+              "metacognition_lock_signal": "none",
+              "loop_risk": "none",
+              "consumer_mismatch_risk": "none",
+              "acceptance_consumer": "machine file/assertion check",
+              "scope_sink_risk": "none"
+            },
+            "layer_2_company_roles": {
+              "custodian": {
+                "request_verdict": "ACCEPT_AS_IS",
+                "accepted_intent": "检查并修复当前解析器验证行为",
+                "minimal_action": "Apply only the smallest change that directly serves current acceptance.",
+                "rejected_scope": [],
+                "backlog_items": []
+              }
+            },
+            "precision_level": "high",
+            "conversation_plane": "spec",
+            "scope_anchor": [
+              "Fix parser validation behavior.",
+              "src/parser.py",
+              "tests/**",
+              "current acceptance only"
+            ],
+            "time_cost_signal": "low",
+            "value_signal": "high",
+            "consumer_mismatch_risk": "none",
+            "scope_sink_risk": "none"
+          },
+          "ts": "2026-07-15T18:28:18+00:00",
+          "provenance": {
+            "decision_id": "554f2c23b9ff77f3d5a2",
+            "router_version": "2.0",
+            "runtime_sha256": "8b8f6bcf39810b42b573373a70580af50f5743162a8a40c8863c7d97cf0974ca",
+            "north_star_hash": "d8404a13c5c2578045c39fe4fe0a70d50f63c1715095d45e6cdbecfa2b524c6f",
+            "north_star_contract_version": "1.2",
+            "program_phase_id": null,
+            "active_ticket_id": "REQUEST-001",
+            "active_ticket_status": "ACTIVE",
+            "acceptance_fingerprint": "9075df03635eb0326e696dc0b647c171d28aefb299d19a281194b1e1796f96fa"
+          }
+        }
+      },
+      "expected": "equivalent Chinese and English mutation requests route consistently"
+    },
+    {
+      "scenario": "artifact_quality",
+      "duration_seconds": 0.802,
+      "passed": true,
+      "actual": {
+        "status": "NEEDS_QUALITY_EVIDENCE",
+        "reasons": [
+          "quality gate not satisfied: publishable-video (artifact)"
+        ],
+        "suggested_action": "add_quality_evidence_or_fix",
+        "quality": {
+          "status": "FAIL",
+          "technical_pass": "NOT_REQUIRED",
+          "artifact_quality_pass": false,
+          "product_pass": "NOT_REQUIRED",
+          "market_pass": "NOT_REQUIRED",
+          "gates": [
+            {
+              "id": "publishable-video",
+              "dimension": "artifact",
+              "required": true,
+              "status": "FAIL",
+              "validation_id": null,
+              "evidence_count": 0
+            }
+          ],
+          "blockers": [
+            "quality gate not satisfied: publishable-video (artifact)"
+          ]
+        },
+        "prune_check": {
+          "status": "CLEAN",
+          "scope": "current-ticket",
+          "files_scanned": 1,
+          "noise_score": 0.0,
+          "reasons": [],
+          "advisories": [],
+          "required_action": "continue",
+          "ticket_noise_status": "CLEAN",
+          "repository_hygiene_status": "NOT_SCANNED"
+        },
+        "close_readiness": {
+          "machine_acceptance_ready": false,
+          "company_runtime_complete": false,
+          "janitor_clear": true
+        },
+        "mdcp": {
+          "protocol_version": "1.0",
+          "acceptance_consumer": "machine file/assertion check",
+          "scope_anchor": [
+            "Produce one video artifact that passes a declared visual quality gate.",
+            "outputs/result.mp4",
+            "current acceptance only"
+          ],
+          "company_subagents": {
+            "required": true,
+            "plan_status": "SUBAGENT_REQUIRED",
+            "complexity_tier": "T1_STANDARD",
+            "required_roles": [
+              "engineering"
+            ],
+            "min_subagents": 1,
+            "runtime_binding": "external_runtime_required",
+            "missing_roles": [
+              "engineering"
+            ],
+            "runtime_execution_verified": false,
+            "receipt_count": 0,
+            "preserved_roles": [],
+            "invalidated_roles": []
+          },
+          "layer_3_janitor_auditor": {
+            "auditor": {
+              "status": "NEEDS_QUALITY_EVIDENCE",
+              "blocking_reasons": [
+                "quality gate not satisfied: publishable-video (artifact)"
+              ],
+              "advisories": [],
+              "required_action": "add_quality_evidence_or_fix",
+              "acceptance_consumer_check": "pass",
+              "scope_anchor_check": "pass",
+              "axis_fatigue_check": "none",
+              "precision_mismatch_check": "none"
+            }
+          },
+          "layer_3_pass_criteria": {
+            "janitor_checked": true,
+            "auditor_checked": true,
+            "no_artifact_sprawl_blocker": true,
+            "validation_not_failed": false,
+            "acceptance_consumer_known": true,
+            "scope_anchor_not_violated": true,
+            "unresolved_axis_fatigue_not_strong": true,
+            "close_requires_validation_pass": false,
+            "company_runtime_complete": false
+          }
+        },
+        "axis_advisory": {
+          "status": "OK",
+          "reason": "not enough recent tickets for axis-fatigue signal"
+        },
+        "supervision": {
+          "level": "DEEP",
+          "ticket_required": true,
+          "controls": [
+            "scope_boundary",
+            "machine_acceptance",
+            "company_subagents",
+            "current_ticket_janitor",
+            "auditor",
+            "close_validation"
+          ],
+          "company_mode": "required_if_independent_deliverable",
+          "janitor_mode": "current_ticket",
+          "intermediate_check": "recommended",
+          "reason": "High-consequence, parallel, broad-company, or product-quality work justifies independent roles and deeper audit.",
+          "net_benefit": {
+            "decision": "APPLY_DEEP",
+            "basis": [
+              "high consequence or parallel integration",
+              "independent evidence reduces expensive rework",
+              "cleanup audit protects final delivery"
+            ],
+            "rule": "Activate a control only when its expected rework reduction exceeds its execution and coordination cost."
+          },
+          "complexity_tier": "T1_STANDARD",
+          "breadth": "B1_FOCUSED"
+        }
+      },
+      "expected": "artifact existence alone cannot satisfy declared quality"
+    },
+    {
+      "scenario": "company_phase",
+      "duration_seconds": 1.622,
+      "passed": true,
+      "actual": {
+        "before": {
+          "required": true,
+          "plan_status": "SUBAGENT_REQUIRED",
+          "delegation_decision": {
+            "required": true,
+            "reason": "The ticket has an executable or specialist deliverable that benefits from at least one accountable department.",
+            "signal": "DEPARTMENT_WORK_REQUIRED"
+          },
+          "complexity_tier": "T1_STANDARD",
+          "task_depth": "D1_STANDARD",
+          "task_breadth": "B2_MULTI_FUNCTION",
+          "required_roles": [
+            "business",
+            "engineering"
+          ],
+          "department_count": 2,
+          "automatic_department_limit": 4,
+          "min_subagents": 2,
+          "max_subagents": 2,
+          "department_capacity": "unbounded_by_protocol",
+          "department_selection_source": "task_driven_auto",
+          "dispatch": {
+            "total_subagents": 2,
+            "max_parallel_per_wave": 2,
+            "wave_count": 1,
+            "all_selected_departments_must_run": true,
+            "structured_outputs_only": true,
+            "release_after_deliverable": true,
+            "child_agents_may_expand_roster": false,
+            "reserve_qa_capacity": false,
+            "explicit_model_spawn_uses_fork_context": false
+          },
+          "ceo_confirmation": {
+            "required": false,
+            "required_above_subagent_count": 4,
+            "status": "NOT_REQUIRED",
+            "decision": "KEEP_CURRENT",
+            "confirmed_by": null,
+            "reason": null,
+            "confirmed_at": null,
+            "roster_fingerprint": "8cfbb5d5991fbf49",
+            "confirmation_template": null
+          },
+          "model_routes": [
+            {
+              "role": "business",
+              "preferred_model": "gpt-5.6-sol",
+              "reasoning_effort": "high",
+              "model_range": {
+                "minimum": {
+                  "model": "gpt-5.6-sol",
+                  "effort": "medium"
+                },
+                "recommended": {
+                  "model": "gpt-5.6-sol",
+                  "effort": "high"
+                },
+                "maximum": {
+                  "model": "gpt-5.6-sol",
+                  "effort": "xhigh"
+                }
+              }
+            },
+            {
+              "role": "engineering",
+              "preferred_model": "gpt-5.6-terra",
+              "reasoning_effort": "high",
+              "model_range": {
+                "minimum": {
+                  "model": "gpt-5.6-terra",
+                  "effort": "medium"
+                },
+                "recommended": {
+                  "model": "gpt-5.6-terra",
+                  "effort": "high"
+                },
+                "maximum": {
+                  "model": "gpt-5.6-terra",
+                  "effort": "xhigh"
+                }
+              }
+            }
+          ],
+          "strategy_model": null,
+          "strategy_effort": null,
+          "runtime_binding": "external_runtime_required",
+          "subagent_spawn_required_before_product_edits": true,
+          "runtime_execution_verified": false,
+          "runtime_verification_basis": "incomplete_role_receipts",
+          "runtime_roster_matches": true,
+          "missing_roles": [
+            "business",
+            "engineering"
+          ],
+          "preserved_roles": [],
+          "invalidated_roles": [],
+          "role_status": {
+            "business": {
+              "status": "NOT_STARTED",
+              "attempts": 0,
+              "completed_agent_id": null,
+              "result_hash": null,
+              "failed_attempts": 0,
+              "latest_failure_class": null,
+              "recommended_action": null,
+              "invalidated_receipts": 0,
+              "contract_fingerprint": "08699fdfedf1698a"
+            },
+            "engineering": {
+              "status": "NOT_STARTED",
+              "attempts": 0,
+              "completed_agent_id": null,
+              "result_hash": null,
+              "failed_attempts": 0,
+              "latest_failure_class": null,
+              "recommended_action": null,
+              "invalidated_receipts": 0,
+              "contract_fingerprint": "100fdb1c5baeec4a"
+            }
+          },
+          "receipt_count": 0
+        },
+        "after": {
+          "required": true,
+          "plan_status": "SUBAGENT_REQUIRED",
+          "delegation_decision": {
+            "required": true,
+            "reason": "The ticket has an executable or specialist deliverable that benefits from at least one accountable department.",
+            "signal": "DEPARTMENT_WORK_REQUIRED"
+          },
+          "complexity_tier": "T1_STANDARD",
+          "task_depth": "D1_STANDARD",
+          "task_breadth": "B2_MULTI_FUNCTION",
+          "required_roles": [
+            "business",
+            "engineering"
+          ],
+          "department_count": 2,
+          "automatic_department_limit": 4,
+          "min_subagents": 2,
+          "max_subagents": 2,
+          "department_capacity": "unbounded_by_protocol",
+          "department_selection_source": "task_driven_auto",
+          "dispatch": {
+            "total_subagents": 2,
+            "max_parallel_per_wave": 2,
+            "wave_count": 1,
+            "all_selected_departments_must_run": true,
+            "structured_outputs_only": true,
+            "release_after_deliverable": true,
+            "child_agents_may_expand_roster": false,
+            "reserve_qa_capacity": false,
+            "explicit_model_spawn_uses_fork_context": false
+          },
+          "ceo_confirmation": {
+            "required": false,
+            "required_above_subagent_count": 4,
+            "status": "NOT_REQUIRED",
+            "decision": "KEEP_CURRENT",
+            "confirmed_by": null,
+            "reason": null,
+            "confirmed_at": null,
+            "roster_fingerprint": "8cfbb5d5991fbf49",
+            "confirmation_template": null
+          },
+          "model_routes": [
+            {
+              "role": "business",
+              "preferred_model": "gpt-5.6-sol",
+              "reasoning_effort": "high",
+              "model_range": {
+                "minimum": {
+                  "model": "gpt-5.6-sol",
+                  "effort": "medium"
+                },
+                "recommended": {
+                  "model": "gpt-5.6-sol",
+                  "effort": "high"
+                },
+                "maximum": {
+                  "model": "gpt-5.6-sol",
+                  "effort": "xhigh"
+                }
+              }
+            },
+            {
+              "role": "engineering",
+              "preferred_model": "gpt-5.6-terra",
+              "reasoning_effort": "high",
+              "model_range": {
+                "minimum": {
+                  "model": "gpt-5.6-terra",
+                  "effort": "medium"
+                },
+                "recommended": {
+                  "model": "gpt-5.6-terra",
+                  "effort": "high"
+                },
+                "maximum": {
+                  "model": "gpt-5.6-terra",
+                  "effort": "xhigh"
+                }
+              }
+            }
+          ],
+          "strategy_model": null,
+          "strategy_effort": null,
+          "runtime_binding": "external_runtime_required",
+          "subagent_spawn_required_before_product_edits": true,
+          "runtime_execution_verified": true,
+          "runtime_verification_basis": "completed_role_receipts_with_result_hashes",
+          "runtime_roster_matches": true,
+          "missing_roles": [],
+          "preserved_roles": [
+            "business",
+            "engineering"
+          ],
+          "invalidated_roles": [],
+          "role_status": {
+            "business": {
+              "status": "COMPLETED",
+              "attempts": 1,
+              "completed_agent_id": "matrix-business-0",
+              "result_hash": "7efc5ec46efa1e2e8e5cef5778aa32ee43909ef9916130b0c7bb76c8032be463",
+              "failed_attempts": 0,
+              "latest_failure_class": null,
+              "recommended_action": null,
+              "invalidated_receipts": 0,
+              "contract_fingerprint": "08699fdfedf1698a"
+            },
+            "engineering": {
+              "status": "COMPLETED",
+              "attempts": 1,
+              "completed_agent_id": "matrix-engineering-1",
+              "result_hash": "99ba792c3311c4e4c3700200dee73331b81897fd2a36d89bd6a767101b913874",
+              "failed_attempts": 0,
+              "latest_failure_class": null,
+              "recommended_action": null,
+              "invalidated_receipts": 0,
+              "contract_fingerprint": "100fdb1c5baeec4a"
+            }
+          },
+          "receipt_count": 4
+        },
+        "close": {
+          "status": "PASS",
+          "ticket": ".agent/tickets/done/PHASE-001.json",
+          "validation": {
+            "status": "PASS",
+            "cache_hit": false,
+            "input_fingerprint": "2a5deeadfbe47819b796c79caafc632159f34361e8289c1c26d85ce5a26e5eb8",
+            "validated_at": "2026-07-15T18:28:20+00:00",
+            "root_cause": null,
+            "executed_ids": [],
+            "skipped_ids": [],
+            "suppressed_cascade_count": 0,
+            "cleanup_warnings": []
+          },
+          "quality": {
+            "status": "PASS",
+            "technical_pass": "NOT_REQUIRED",
+            "artifact_quality_pass": "NOT_REQUIRED",
+            "product_pass": "NOT_REQUIRED",
+            "market_pass": "NOT_REQUIRED",
+            "gates": [],
+            "blockers": []
+          },
+          "environment_status": null,
+          "program_phase": {
+            "status": "COMPLETED",
+            "phase_id": "MVP-1",
+            "goal": "Prove one bounded workflow",
+            "exit_criteria": [
+              "Ticket passes"
+            ],
+            "source": "user_confirmed",
+            "confirmed_at": "2026-07-15T18:28:19+00:00",
+            "north_star_hash": "2a81494b9ec9e35de026bb046f2db449b158effc3a040fa559286960b8640513",
+            "completed_at": "2026-07-15T18:28:20+00:00",
+            "completion_reason": "Ticket PHASE-001 passed its frozen acceptance.",
+            "completed_by_ticket_id": "PHASE-001"
+          },
+          "mdcp": {
+            "protocol_version": "1.0",
+            "acceptance_consumer": "machine file/assertion check",
+            "scope_anchor": [
+              "Implement and validate one bounded workflow.",
+              "src/workflow.txt",
+              "current acceptance only"
+            ],
+            "company_subagents": {
+              "required": true,
+              "plan_status": "SUBAGENT_REQUIRED",
+              "complexity_tier": "T1_STANDARD",
+              "required_roles": [
+                "business",
+                "engineering"
+              ],
+              "min_subagents": 2,
+              "runtime_binding": "external_runtime_required",
+              "missing_roles": [],
+              "runtime_execution_verified": true,
+              "receipt_count": 4,
+              "preserved_roles": [
+                "business",
+                "engineering"
+              ],
+              "invalidated_roles": []
+            },
+            "layer_3_janitor_auditor": {
+              "auditor": {
+                "status": "PASS_READY",
+                "blocking_reasons": [],
+                "advisories": [],
+                "required_action": "close",
+                "acceptance_consumer_check": "pass",
+                "scope_anchor_check": "pass",
+                "axis_fatigue_check": "none",
+                "precision_mismatch_check": "none"
+              }
+            },
+            "layer_3_pass_criteria": {
+              "janitor_checked": true,
+              "auditor_checked": true,
+              "no_artifact_sprawl_blocker": true,
+              "validation_not_failed": true,
+              "acceptance_consumer_known": true,
+              "scope_anchor_not_violated": true,
+              "unresolved_axis_fatigue_not_strong": true,
+              "close_requires_validation_pass": true,
+              "company_runtime_complete": true
+            }
+          },
+          "supervision": {
+            "level": "STANDARD",
+            "ticket_required": true,
+            "controls": [
+              "scope_boundary",
+              "machine_acceptance",
+              "risk_adaptive_company",
+              "close_validation"
+            ],
+            "company_mode": "required_if_independent_deliverable",
+            "janitor_mode": "not_required",
+            "intermediate_check": "on_demand",
+            "reason": "The ticket has meaningful implementation or cross-function risk, while only targeted controls are justified.",
+            "net_benefit": {
+              "decision": "APPLY_TARGETED",
+              "basis": [
+                "meaningful implementation risk",
+                "bounded acceptance reduces rework",
+                "deep audit omitted",
+                "no cleanup or broad-change signal; Janitor omitted"
+              ],
+              "rule": "Activate a control only when its expected rework reduction exceeds its execution and coordination cost."
+            },
+            "complexity_tier": "T1_STANDARD",
+            "breadth": "B2_MULTI_FUNCTION"
+          }
+        },
+        "phase": {
+          "status": "COMPLETED",
+          "phase_id": "MVP-1",
+          "goal": "Prove one bounded workflow",
+          "exit_criteria": [
+            "Ticket passes"
+          ],
+          "source": "user_confirmed",
+          "confirmed_at": "2026-07-15T18:28:19+00:00",
+          "north_star_hash": "2a81494b9ec9e35de026bb046f2db449b158effc3a040fa559286960b8640513",
+          "completed_at": "2026-07-15T18:28:20+00:00",
+          "completion_reason": "Ticket PHASE-001 passed its frozen acceptance.",
+          "completed_by_ticket_id": "PHASE-001"
+        }
+      },
+      "expected": "one result call per role and one close synchronize phase"
+    },
+    {
+      "scenario": "non_git_line_delta",
+      "duration_seconds": 0.848,
+      "passed": true,
+      "actual": {
+        "check": {
+          "status": "PASS_READY",
+          "reasons": [],
+          "suggested_action": "close",
+          "quality": {
+            "status": "PASS",
+            "technical_pass": "NOT_REQUIRED",
+            "artifact_quality_pass": "NOT_REQUIRED",
+            "product_pass": "NOT_REQUIRED",
+            "market_pass": "NOT_REQUIRED",
+            "gates": [],
+            "blockers": []
+          },
+          "prune_check": {
+            "status": "NOT_REQUIRED",
+            "scope": "current-ticket",
+            "files_scanned": 0,
+            "noise_score": 0.0,
+            "reasons": [],
+            "advisories": [],
+            "required_action": "continue",
+            "ticket_noise_status": "NOT_REQUIRED",
+            "repository_hygiene_status": "NOT_SCANNED",
+            "supervision_level": "STANDARD",
+            "net_benefit_reason": "No changed-path signal justified a bounded Janitor scan."
+          },
+          "close_readiness": {
+            "machine_acceptance_ready": true,
+            "company_runtime_complete": true,
+            "janitor_clear": true
+          },
+          "mdcp": {
+            "protocol_version": "1.0",
+            "acceptance_consumer": "machine file/assertion check",
+            "scope_anchor": [
+              "Change one foundation value without counting the whole file.",
+              "src/foundation.py",
+              "current acceptance only"
+            ],
+            "company_subagents": {
+              "required": false,
+              "plan_status": "NO_SUBAGENT_NEEDED",
+              "complexity_tier": "T1_STANDARD",
+              "required_roles": [],
+              "min_subagents": 0,
+              "runtime_binding": "not_required",
+              "missing_roles": [],
+              "runtime_execution_verified": true,
+              "receipt_count": 0,
+              "preserved_roles": [],
+              "invalidated_roles": []
+            },
+            "layer_3_janitor_auditor": {
+              "auditor": {
+                "status": "PASS_READY",
+                "blocking_reasons": [],
+                "advisories": [],
+                "required_action": "close",
+                "acceptance_consumer_check": "pass",
+                "scope_anchor_check": "pass",
+                "axis_fatigue_check": "none",
+                "precision_mismatch_check": "none"
+              }
+            },
+            "layer_3_pass_criteria": {
+              "janitor_checked": true,
+              "auditor_checked": true,
+              "no_artifact_sprawl_blocker": true,
+              "validation_not_failed": true,
+              "acceptance_consumer_known": true,
+              "scope_anchor_not_violated": true,
+              "unresolved_axis_fatigue_not_strong": true,
+              "close_requires_validation_pass": true,
+              "company_runtime_complete": true
+            }
+          },
+          "axis_advisory": {
+            "status": "OK",
+            "reason": "not enough recent tickets for axis-fatigue signal"
+          },
+          "supervision": {
+            "level": "STANDARD",
+            "ticket_required": true,
+            "controls": [
+              "scope_boundary",
+              "machine_acceptance",
+              "risk_adaptive_company",
+              "close_validation"
+            ],
+            "company_mode": "required_if_independent_deliverable",
+            "janitor_mode": "not_required",
+            "intermediate_check": "on_demand",
+            "reason": "The ticket has meaningful implementation or cross-function risk, while only targeted controls are justified.",
+            "net_benefit": {
+              "decision": "APPLY_TARGETED",
+              "basis": [
+                "meaningful implementation risk",
+                "bounded acceptance reduces rework",
+                "deep audit omitted",
+                "no cleanup or broad-change signal; Janitor omitted"
+              ],
+              "rule": "Activate a control only when its expected rework reduction exceeds its execution and coordination cost."
+            },
+            "complexity_tier": "T1_STANDARD",
+            "breadth": "B1_FOCUSED"
+          }
+        },
+        "budget_used": {
+          "tool_calls": 0,
+          "tool_calls_by_type": {
+            "read": 0,
+            "write": 0,
+            "validation": 0,
+            "agent": 0,
+            "external": 0,
+            "failed": 0
+          },
+          "budget_enforcement": "ADVISORY_UNVERIFIED",
+          "changed_files": [
+            "src/foundation.py"
+          ],
+          "diff_lines": 2,
+          "started_at": "2026-07-15T18:28:21+00:00",
+          "last_metered_at": "2026-07-15T18:28:21+00:00",
+          "elapsed_minutes": 0.0,
+          "wall_clock_minutes": 0.0,
+          "hook_nonce": "b771292fb86a43a7bdd8fdb820eb8826",
+          "baseline_top_level_entries": [
+            "src"
+          ],
+          "baseline_ref": ".agent/runtime/baselines/18278c9b2de04262bb6fd8296dd525c9.json.gz",
+          "baseline_sha256": "433f2b5ae29449770458be8d25bcd36fd2ef252b155505ab8fc5050c0ae11698",
+          "baseline_entry_count": 1,
+          "baseline_volatile_snapshot": {},
+          "observed_changes": [
+            "src/foundation.py"
+          ],
+          "immutable_changes": [],
+          "runtime_changes": [],
+          "upstream_evidence_changes": [],
+          "changed_files_count": 1,
+          "binary_artifacts_changed": [],
+          "binary_bytes_observed": 0,
+          "volatile_runtime_changes": []
+        }
+      },
+      "expected": "one-line non-Git edit uses a real line delta"
+    },
+    {
+      "scenario": "aggregate_preflight",
+      "duration_seconds": 0.43,
+      "passed": true,
+      "actual": {
+        "ok": false,
+        "ticket": ".agent/tickets/pending/PREFLIGHT-001.json",
+        "errors": [
+          "validation executable unavailable: missing_supply_tool -> definitely-not-installed-supply-tool",
+          "preflight dependency missing: foundation/source-a.json",
+          "preflight dependency missing: foundation/source-b.json"
+        ],
+        "supported_acceptance": {
+          "commands_pass": "validation_catalog ids only, not raw shell commands",
+          "contains": [
+            "path::required text",
+            {
+              "file": "path",
+              "text": "required text"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "file_exists",
+              "path": "path"
+            },
+            {
+              "type": "file_contains",
+              "file": "path",
+              "text": "required text"
+            },
+            {
+              "type": "json_field_equals",
+              "file": "path",
+              "path": "a.b",
+              "equals": "value"
+            }
+          ]
+        },
+        "company_subagents": {
+          "required": false,
+          "plan_status": "NO_SUBAGENT_NEEDED",
+          "delegation_decision": {
+            "required": false,
+            "reason": "The ticket is focused and has no independent specialist deliverable beyond the main executor.",
+            "signal": "MAIN_THREAD_ONLY_FOCUSED_ACTION"
+          },
+          "complexity_tier": "T1_STANDARD",
+          "task_depth": "D1_STANDARD",
+          "task_breadth": "B1_FOCUSED",
+          "required_roles": [],
+          "department_count": 0,
+          "automatic_department_limit": 4,
+          "min_subagents": 0,
+          "max_subagents": 0,
+          "department_capacity": "unbounded_by_protocol",
+          "department_selection_source": "task_driven_auto",
+          "dispatch": {
+            "total_subagents": 0,
+            "max_parallel_per_wave": 0,
+            "wave_count": 0,
+            "all_selected_departments_must_run": false,
+            "structured_outputs_only": true,
+            "release_after_deliverable": true,
+            "child_agents_may_expand_roster": false,
+            "reserve_qa_capacity": false,
+            "explicit_model_spawn_uses_fork_context": false
+          },
+          "ceo_confirmation": {
+            "required": false,
+            "required_above_subagent_count": 4,
+            "status": "NOT_REQUIRED",
+            "decision": "KEEP_CURRENT",
+            "confirmed_by": null,
+            "reason": null,
+            "confirmed_at": null,
+            "roster_fingerprint": "4f53cda18c2baa0c",
+            "confirmation_template": null
+          },
+          "model_routes": [],
+          "strategy_model": null,
+          "strategy_effort": null,
+          "runtime_binding": "not_required",
+          "subagent_spawn_required_before_product_edits": false,
+          "runtime_execution_verified": true,
+          "runtime_verification_basis": "completed_role_receipts_with_result_hashes",
+          "runtime_roster_matches": true,
+          "missing_roles": [],
+          "preserved_roles": [],
+          "invalidated_roles": [],
+          "role_status": {},
+          "receipt_count": 0
+        },
+        "preflight": {
+          "status": "BLOCKED",
+          "blockers": [
+            "validation executable unavailable: missing_supply_tool -> definitely-not-installed-supply-tool",
+            "preflight dependency missing: foundation/source-a.json",
+            "preflight dependency missing: foundation/source-b.json"
+          ],
+          "advisories": [],
+          "checked_at": "2026-07-15T18:28:22+00:00"
+        }
+      },
+      "expected": "one preflight exposes the whole known blocker chain"
+    },
+    {
+      "scenario": "compact_output",
+      "duration_seconds": 1.436,
+      "passed": true,
+      "actual": {
+        "compact_bytes": 3275,
+        "verbose_bytes": 22095,
+        "compact_keys": [
+          "axis_advisory",
+          "close_readiness",
+          "mdcp",
+          "prune_check",
+          "quality",
+          "reasons",
+          "status",
+          "suggested_action",
+          "supervision"
+        ],
+        "verbose_has_mdcp_audit": true
+      },
+      "expected": "default output is compact; verbose retains full diagnostics"
+    },
+    {
+      "scenario": "change_request_routing",
+      "duration_seconds": 0.81,
+      "passed": true,
+      "actual": {
+        "without_active_ticket": {
+          "request": "Add a packaging quality filter for production operators",
+          "verdict": "PROPOSE_NEW_TICKET",
+          "north_star_mapping": "Build a packaging quality dashboard for production operators.",
+          "goal_mapping": [
+            "Build a packaging quality dashboard for production operators."
+          ],
+          "accepted_intent": "Add a packaging quality filter for production operators",
+          "minimal_action": "Create a new bounded ticket that preserves this request without inheriting terminal ticket scope.",
+          "rejected_scope": [],
+          "backlog_items": [],
+          "reason": "The request aligns with the North Star, but no ACTIVE ticket exists.",
+          "allowed_current_change": false,
+          "operation_class": "product_edit",
+          "north_star_alignment": "PARTIAL",
+          "active_ticket": null,
+          "ticket_scope_alignment": "NOT_APPLICABLE",
+          "read_only_allowed": false,
+          "planning_allowed": false,
+          "product_edit_allowed": false,
+          "requires_new_ticket": true,
+          "program_phase": null,
+          "mdcp": {
+            "protocol_version": "1.0",
+            "layer_1_structured_expression": {
+              "north_star_goal": "Build a packaging quality dashboard for production operators.",
+              "goal_definition_quality": "TEXT_ONLY",
+              "precise_goal": "Build a packaging quality dashboard for production operators.",
+              "problem_statement": "Build a packaging quality dashboard for production operators.",
+              "first_principles": [],
+              "process_nodes": [],
+              "goal_deliverables": [],
+              "goal_final_acceptance": [],
+              "goal_anchor": "Add a packaging quality filter for production operators",
+              "scope_anchor": [
+                "bounded current ticket"
+              ],
+              "conversation_plane": "execution",
+              "precision_level": "medium",
+              "time_cost_signal": "medium",
+              "value_signal": "medium",
+              "metacognition_lock_signal": "none",
+              "loop_risk": "none",
+              "consumer_mismatch_risk": "weak",
+              "acceptance_consumer": "draft ticket reviewer",
+              "scope_sink_risk": "none"
+            },
+            "layer_2_company_roles": {
+              "custodian": {
+                "request_verdict": "PROPOSE_NEW_TICKET",
+                "accepted_intent": "Add a packaging quality filter for production operators",
+                "minimal_action": "Create a new bounded ticket that preserves this request without inheriting terminal ticket scope.",
+                "rejected_scope": [],
+                "backlog_items": []
+              }
+            },
+            "precision_level": "medium",
+            "conversation_plane": "execution",
+            "scope_anchor": [
+              "bounded current ticket"
+            ],
+            "time_cost_signal": "medium",
+            "value_signal": "medium",
+            "consumer_mismatch_risk": "weak",
+            "scope_sink_risk": "none"
+          },
+          "ts": "2026-07-15T18:28:24+00:00",
+          "provenance": {
+            "decision_id": "ad3f2a1e2f67828f52ea",
+            "router_version": "2.0",
+            "runtime_sha256": "8b8f6bcf39810b42b573373a70580af50f5743162a8a40c8863c7d97cf0974ca",
+            "north_star_hash": "5c84c286ccf89d40eb7e33a46e59491571988fa0977c05023fb2676e66307e1b",
+            "north_star_contract_version": "1.2",
+            "program_phase_id": null,
+            "active_ticket_id": null,
+            "active_ticket_status": null,
+            "acceptance_fingerprint": null
+          }
+        },
+        "with_active_ticket": {
+          "request": "Add a supplier scorecard to the packaging quality dashboard",
+          "verdict": "SPLIT",
+          "north_star_mapping": "Build a packaging quality dashboard for production operators.",
+          "goal_mapping": [
+            "Build a packaging quality dashboard for production operators."
+          ],
+          "accepted_intent": null,
+          "minimal_action": "Create a future bounded ticket if this still matters.",
+          "rejected_scope": [],
+          "backlog_items": [
+            "Add a supplier scorecard to the packaging quality dashboard"
+          ],
+          "reason": "Request may serve the North Star but does not map to current acceptance.",
+          "allowed_current_change": false,
+          "operation_class": "product_edit",
+          "north_star_alignment": "PARTIAL",
+          "active_ticket": {
+            "ticket_id": "LOT-STATUS-001",
+            "status": "ACTIVE",
+            "acceptance_fingerprint": "ce0cde2e75d7f9f24eb2b31c70036edaadda41f10361255a6c9b111d437f66d3"
+          },
+          "ticket_scope_alignment": "OUTSIDE_CURRENT_TICKET",
+          "read_only_allowed": false,
+          "planning_allowed": false,
+          "product_edit_allowed": false,
+          "requires_new_ticket": true,
+          "program_phase": null,
+          "mdcp": {
+            "protocol_version": "1.0",
+            "layer_1_structured_expression": {
+              "north_star_goal": "Build a packaging quality dashboard for production operators.",
+              "goal_definition_quality": "TEXT_ONLY",
+              "precise_goal": "Build a packaging quality dashboard for production operators.",
+              "problem_statement": "Build a packaging quality dashboard for production operators.",
+              "first_principles": [],
+              "process_nodes": [],
+              "goal_deliverables": [],
+              "goal_final_acceptance": [],
+              "goal_anchor": "Fix the current lot status label.",
+              "scope_anchor": [
+                "Fix the current lot status label.",
+                "src/lot_status.py",
+                "current acceptance only"
+              ],
+              "conversation_plane": "execution",
+              "precision_level": "medium",
+              "time_cost_signal": "low",
+              "value_signal": "high",
+              "metacognition_lock_signal": "none",
+              "loop_risk": "none",
+              "consumer_mismatch_risk": "none",
+              "acceptance_consumer": "machine file/assertion check",
+              "scope_sink_risk": "none"
+            },
+            "layer_2_company_roles": {
+              "custodian": {
+                "request_verdict": "SPLIT",
+                "accepted_intent": "",
+                "minimal_action": "Create a future bounded ticket if this still matters.",
+                "rejected_scope": [],
+                "backlog_items": [
+                  "Add a supplier scorecard to the packaging quality dashboard"
+                ]
+              }
+            },
+            "precision_level": "medium",
+            "conversation_plane": "execution",
+            "scope_anchor": [
+              "Fix the current lot status label.",
+              "src/lot_status.py",
+              "current acceptance only"
+            ],
+            "time_cost_signal": "low",
+            "value_signal": "high",
+            "consumer_mismatch_risk": "none",
+            "scope_sink_risk": "none"
+          },
+          "ts": "2026-07-15T18:28:24+00:00",
+          "provenance": {
+            "decision_id": "246082f1df3f7aff08ef",
+            "router_version": "2.0",
+            "runtime_sha256": "8b8f6bcf39810b42b573373a70580af50f5743162a8a40c8863c7d97cf0974ca",
+            "north_star_hash": "5c84c286ccf89d40eb7e33a46e59491571988fa0977c05023fb2676e66307e1b",
+            "north_star_contract_version": "1.2",
+            "program_phase_id": null,
+            "active_ticket_id": "LOT-STATUS-001",
+            "active_ticket_status": "ACTIVE",
+            "acceptance_fingerprint": "ce0cde2e75d7f9f24eb2b31c70036edaadda41f10361255a6c9b111d437f66d3"
+          }
+        }
+      },
+      "expected": "new aligned work becomes a new/split/backlog ticket instead of mutating current acceptance"
+    }
+  ]
+}

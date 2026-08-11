@@ -1,0 +1,69 @@
+{
+  "name": "goal_compass_mdcp_contract",
+  "description": "Goal Compass use of MDCP as a cross-layer rule library.",
+  "version": "1.0",
+  "layers": {
+    "layer_1_structured_expression": [
+      "north_star_goal",
+      "goal_anchor",
+      "scope_anchor",
+      "conversation_plane",
+      "precision_level",
+      "time_cost_signal",
+      "value_signal",
+      "metacognition_lock_signal",
+      "loop_risk",
+      "consumer_mismatch_risk",
+      "acceptance_consumer",
+      "scope_sink_risk"
+    ],
+    "layer_1_pass_criteria": [
+      "north_star_confirmed",
+      "request_classified",
+      "ticket_structured",
+      "machine_acceptance_present",
+      "acceptance_consumer_known",
+      "allowed_paths_present",
+      "forbidden_paths_present",
+      "budget_present",
+      "drift_signals_present",
+      "raw_shell_acceptance_forbidden",
+      "scope_anchor_present"
+    ],
+    "layer_2_company_roles": [
+      "strategy",
+      "business",
+      "product",
+      "engineering",
+      "architecture",
+      "qa",
+      "scope_cost",
+      "custodian",
+      "janitor",
+      "auditor"
+    ],
+    "layer_2_company_subagents": [
+      "mandatory",
+      "complexity_tier",
+      "required_subagents",
+      "main_thread",
+      "runtime_binding",
+      "runtime_execution_verified",
+      "ceo_confirmation",
+      "department_capacity",
+      "dispatch"
+    ],
+    "layer_3_janitor_auditor": [
+      "janitor",
+      "auditor"
+    ]
+  },
+  "forbidden": [
+    "gate chains",
+    "role gates",
+    "reverse-signal loops",
+    "security governor behavior",
+    "nested company modes",
+    "multi-agent chat loops"
+  ]
+}

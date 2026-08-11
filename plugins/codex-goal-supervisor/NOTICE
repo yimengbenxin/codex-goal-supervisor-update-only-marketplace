@@ -1,0 +1,10 @@
+Codex Goal Supervisor
+Copyright 2026 Codex Goal Supervisor contributors
+
+This product includes a pinned snapshot derived from Agency Agents:
+https://github.com/msitarzewski/agency-agents
+
+The snapshot is stored under assets/role-packs/agency-agents, retains its
+upstream MIT license, and is pinned to commit
+ebe9c99acb5c96f9468de368d8bead775387d1a7.
+

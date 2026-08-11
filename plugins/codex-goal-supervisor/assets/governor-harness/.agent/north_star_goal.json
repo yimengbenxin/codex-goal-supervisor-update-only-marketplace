@@ -1,0 +1,14 @@
+{
+  "confirmed": false,
+  "goal": null,
+  "candidate_goals": [],
+  "requires_confirmation": true,
+  "source": null,
+  "confirmed_at": null,
+  "main_path": [],
+  "allowed_subgoals": [],
+  "anti_goals": [],
+  "backlog_domains": [],
+  "protected_principles": [],
+  "core_path_patterns": []
+}

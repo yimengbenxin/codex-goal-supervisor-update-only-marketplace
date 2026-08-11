@@ -1,0 +1,344 @@
+{
+  "status": "PASS",
+  "industry_count": 16,
+  "ticket_count": 128,
+  "elapsed_seconds": 42.6681,
+  "results": [
+    {
+      "industry": "aviation",
+      "elapsed_seconds": 2.912,
+      "tickets_started": 8,
+      "tickets_passed": 6,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "axis_fatigue_status": "AXIS_FATIGUE_WARNING",
+      "heavy_request_verdicts": [
+        "BACKLOG"
+      ],
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 7,
+      "janitor_deleted": false,
+      "north_star_preserved": true
+    },
+    {
+      "industry": "pharma",
+      "elapsed_seconds": 2.4512,
+      "tickets_started": 8,
+      "tickets_passed": 6,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "axis_fatigue_status": "AXIS_FATIGUE_WARNING",
+      "heavy_request_verdicts": [
+        "BACKLOG"
+      ],
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 7,
+      "janitor_deleted": false,
+      "north_star_preserved": true
+    },
+    {
+      "industry": "water",
+      "elapsed_seconds": 2.4666,
+      "tickets_started": 8,
+      "tickets_passed": 6,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "axis_fatigue_status": "AXIS_FATIGUE_WARNING",
+      "heavy_request_verdicts": [
+        "BACKLOG"
+      ],
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 7,
+      "janitor_deleted": false,
+      "north_star_preserved": true
+    },
+    {
+      "industry": "emergency",
+      "elapsed_seconds": 2.6088,
+      "tickets_started": 8,
+      "tickets_passed": 6,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "axis_fatigue_status": "AXIS_FATIGUE_WARNING",
+      "heavy_request_verdicts": [
+        "BACKLOG"
+      ],
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 7,
+      "janitor_deleted": false,
+      "north_star_preserved": true
+    },
+    {
+      "industry": "insurance",
+      "elapsed_seconds": 2.4543,
+      "tickets_started": 8,
+      "tickets_passed": 6,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "axis_fatigue_status": "AXIS_FATIGUE_WARNING",
+      "heavy_request_verdicts": [
+        "BACKLOG"
+      ],
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 7,
+      "janitor_deleted": false,
+      "north_star_preserved": true
+    },
+    {
+      "industry": "hospitality",
+      "elapsed_seconds": 2.624,
+      "tickets_started": 8,
+      "tickets_passed": 6,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "axis_fatigue_status": "AXIS_FATIGUE_WARNING",
+      "heavy_request_verdicts": [
+        "BACKLOG"
+      ],
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 7,
+      "janitor_deleted": false,
+      "north_star_preserved": true
+    },
+    {
+      "industry": "transit",
+      "elapsed_seconds": 2.6614,
+      "tickets_started": 8,
+      "tickets_passed": 6,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "axis_fatigue_status": "AXIS_FATIGUE_WARNING",
+      "heavy_request_verdicts": [
+        "BACKLOG"
+      ],
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 7,
+      "janitor_deleted": false,
+      "north_star_preserved": true
+    },
+    {
+      "industry": "museum",
+      "elapsed_seconds": 2.7072,
+      "tickets_started": 8,
+      "tickets_passed": 6,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "axis_fatigue_status": "AXIS_FATIGUE_WARNING",
+      "heavy_request_verdicts": [
+        "BACKLOG"
+      ],
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 7,
+      "janitor_deleted": false,
+      "north_star_preserved": true
+    },
+    {
+      "industry": "semiconductor",
+      "elapsed_seconds": 2.4673,
+      "tickets_started": 8,
+      "tickets_passed": 6,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "axis_fatigue_status": "AXIS_FATIGUE_WARNING",
+      "heavy_request_verdicts": [
+        "BACKLOG"
+      ],
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 7,
+      "janitor_deleted": false,
+      "north_star_preserved": true
+    },
+    {
+      "industry": "telecom",
+      "elapsed_seconds": 2.5862,
+      "tickets_started": 8,
+      "tickets_passed": 6,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "axis_fatigue_status": "AXIS_FATIGUE_WARNING",
+      "heavy_request_verdicts": [
+        "BACKLOG"
+      ],
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 7,
+      "janitor_deleted": false,
+      "north_star_preserved": true
+    },
+    {
+      "industry": "construction",
+      "elapsed_seconds": 2.7414,
+      "tickets_started": 8,
+      "tickets_passed": 6,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "axis_fatigue_status": "AXIS_FATIGUE_WARNING",
+      "heavy_request_verdicts": [
+        "BACKLOG"
+      ],
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 7,
+      "janitor_deleted": false,
+      "north_star_preserved": true
+    },
+    {
+      "industry": "port",
+      "elapsed_seconds": 2.9113,
+      "tickets_started": 8,
+      "tickets_passed": 6,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "axis_fatigue_status": "AXIS_FATIGUE_WARNING",
+      "heavy_request_verdicts": [
+        "BACKLOG"
+      ],
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 7,
+      "janitor_deleted": false,
+      "north_star_preserved": true
+    },
+    {
+      "industry": "mining",
+      "elapsed_seconds": 3.0249,
+      "tickets_started": 8,
+      "tickets_passed": 6,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "axis_fatigue_status": "AXIS_FATIGUE_WARNING",
+      "heavy_request_verdicts": [
+        "BACKLOG"
+      ],
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 7,
+      "janitor_deleted": false,
+      "north_star_preserved": true
+    },
+    {
+      "industry": "waste",
+      "elapsed_seconds": 2.5243,
+      "tickets_started": 8,
+      "tickets_passed": 6,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "axis_fatigue_status": "AXIS_FATIGUE_WARNING",
+      "heavy_request_verdicts": [
+        "BACKLOG"
+      ],
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 7,
+      "janitor_deleted": false,
+      "north_star_preserved": true
+    },
+    {
+      "industry": "fisheries",
+      "elapsed_seconds": 2.8753,
+      "tickets_started": 8,
+      "tickets_passed": 6,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "axis_fatigue_status": "AXIS_FATIGUE_WARNING",
+      "heavy_request_verdicts": [
+        "BACKLOG"
+      ],
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 7,
+      "janitor_deleted": false,
+      "north_star_preserved": true
+    },
+    {
+      "industry": "real_estate",
+      "elapsed_seconds": 2.5546,
+      "tickets_started": 8,
+      "tickets_passed": 6,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "axis_fatigue_status": "AXIS_FATIGUE_WARNING",
+      "heavy_request_verdicts": [
+        "BACKLOG"
+      ],
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 7,
+      "janitor_deleted": false,
+      "north_star_preserved": true
+    }
+  ]
+}

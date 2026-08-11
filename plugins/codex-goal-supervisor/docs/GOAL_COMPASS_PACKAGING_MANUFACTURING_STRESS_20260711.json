@@ -1,0 +1,387 @@
+{
+  "status": "PASS",
+  "sector_count": 14,
+  "ticket_count": 140,
+  "request_count": 168,
+  "elapsed_seconds": 56.8923,
+  "results": [
+    {
+      "sector": "rigid_plastic",
+      "elapsed_seconds": 4.2273,
+      "tickets_started": 10,
+      "tickets_passed": 8,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "request_counts": {
+        "core": 3,
+        "future": 3,
+        "heavy": 3,
+        "acceptance": 3
+      },
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 8,
+      "strategy_effort": "xhigh",
+      "axis_fatigue": "OK",
+      "janitor_non_destructive": true,
+      "north_star_preserved": true
+    },
+    {
+      "sector": "flexible_film",
+      "elapsed_seconds": 3.9288,
+      "tickets_started": 10,
+      "tickets_passed": 8,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "request_counts": {
+        "core": 3,
+        "future": 3,
+        "heavy": 3,
+        "acceptance": 3
+      },
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 8,
+      "strategy_effort": "xhigh",
+      "axis_fatigue": "OK",
+      "janitor_non_destructive": true,
+      "north_star_preserved": true
+    },
+    {
+      "sector": "corrugated",
+      "elapsed_seconds": 3.9814,
+      "tickets_started": 10,
+      "tickets_passed": 8,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "request_counts": {
+        "core": 3,
+        "future": 3,
+        "heavy": 3,
+        "acceptance": 3
+      },
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 8,
+      "strategy_effort": "xhigh",
+      "axis_fatigue": "OK",
+      "janitor_non_destructive": true,
+      "north_star_preserved": true
+    },
+    {
+      "sector": "folding_carton",
+      "elapsed_seconds": 3.9999,
+      "tickets_started": 10,
+      "tickets_passed": 8,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "request_counts": {
+        "core": 3,
+        "future": 3,
+        "heavy": 3,
+        "acceptance": 3
+      },
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 8,
+      "strategy_effort": "xhigh",
+      "axis_fatigue": "OK",
+      "janitor_non_destructive": true,
+      "north_star_preserved": true
+    },
+    {
+      "sector": "molded_fiber",
+      "elapsed_seconds": 3.9263,
+      "tickets_started": 10,
+      "tickets_passed": 8,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "request_counts": {
+        "core": 3,
+        "future": 3,
+        "heavy": 3,
+        "acceptance": 3
+      },
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 8,
+      "strategy_effort": "xhigh",
+      "axis_fatigue": "OK",
+      "janitor_non_destructive": true,
+      "north_star_preserved": true
+    },
+    {
+      "sector": "textile_bags",
+      "elapsed_seconds": 3.9692,
+      "tickets_started": 10,
+      "tickets_passed": 8,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "request_counts": {
+        "core": 3,
+        "future": 3,
+        "heavy": 3,
+        "acceptance": 3
+      },
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 8,
+      "strategy_effort": "xhigh",
+      "axis_fatigue": "OK",
+      "janitor_non_destructive": true,
+      "north_star_preserved": true
+    },
+    {
+      "sector": "metal_food_can",
+      "elapsed_seconds": 3.9725,
+      "tickets_started": 10,
+      "tickets_passed": 8,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "request_counts": {
+        "core": 3,
+        "future": 3,
+        "heavy": 3,
+        "acceptance": 3
+      },
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 8,
+      "strategy_effort": "xhigh",
+      "axis_fatigue": "OK",
+      "janitor_non_destructive": true,
+      "north_star_preserved": true
+    },
+    {
+      "sector": "aerosol",
+      "elapsed_seconds": 3.9305,
+      "tickets_started": 10,
+      "tickets_passed": 8,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "request_counts": {
+        "core": 3,
+        "future": 3,
+        "heavy": 3,
+        "acceptance": 3
+      },
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 8,
+      "strategy_effort": "xhigh",
+      "axis_fatigue": "OK",
+      "janitor_non_destructive": true,
+      "north_star_preserved": true
+    },
+    {
+      "sector": "glass",
+      "elapsed_seconds": 3.9918,
+      "tickets_started": 10,
+      "tickets_passed": 8,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "request_counts": {
+        "core": 3,
+        "future": 3,
+        "heavy": 3,
+        "acceptance": 3
+      },
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 8,
+      "strategy_effort": "xhigh",
+      "axis_fatigue": "OK",
+      "janitor_non_destructive": true,
+      "north_star_preserved": true
+    },
+    {
+      "sector": "aseptic_carton",
+      "elapsed_seconds": 4.0663,
+      "tickets_started": 10,
+      "tickets_passed": 8,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "request_counts": {
+        "core": 3,
+        "future": 3,
+        "heavy": 3,
+        "acceptance": 3
+      },
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 8,
+      "strategy_effort": "xhigh",
+      "axis_fatigue": "OK",
+      "janitor_non_destructive": true,
+      "north_star_preserved": true
+    },
+    {
+      "sector": "labels_printing",
+      "elapsed_seconds": 4.0512,
+      "tickets_started": 10,
+      "tickets_passed": 8,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "request_counts": {
+        "core": 3,
+        "future": 3,
+        "heavy": 3,
+        "acceptance": 3
+      },
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 8,
+      "strategy_effort": "xhigh",
+      "axis_fatigue": "OK",
+      "janitor_non_destructive": true,
+      "north_star_preserved": true
+    },
+    {
+      "sector": "wooden_transit",
+      "elapsed_seconds": 3.9688,
+      "tickets_started": 10,
+      "tickets_passed": 8,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "request_counts": {
+        "core": 3,
+        "future": 3,
+        "heavy": 3,
+        "acceptance": 3
+      },
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 8,
+      "strategy_effort": "xhigh",
+      "axis_fatigue": "OK",
+      "janitor_non_destructive": true,
+      "north_star_preserved": true
+    },
+    {
+      "sector": "protective_foam",
+      "elapsed_seconds": 4.1767,
+      "tickets_started": 10,
+      "tickets_passed": 8,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "request_counts": {
+        "core": 3,
+        "future": 3,
+        "heavy": 3,
+        "acceptance": 3
+      },
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 8,
+      "strategy_effort": "xhigh",
+      "axis_fatigue": "OK",
+      "janitor_non_destructive": true,
+      "north_star_preserved": true
+    },
+    {
+      "sector": "compostable",
+      "elapsed_seconds": 4.6103,
+      "tickets_started": 10,
+      "tickets_passed": 8,
+      "validation_failures_blocked": 1,
+      "budget_overruns_blocked": 1,
+      "request_counts": {
+        "core": 3,
+        "future": 3,
+        "heavy": 3,
+        "acceptance": 3
+      },
+      "default_company_sizes": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "expanded_company_size": 8,
+      "strategy_effort": "xhigh",
+      "axis_fatigue": "OK",
+      "janitor_non_destructive": true,
+      "north_star_preserved": true
+    }
+  ]
+}

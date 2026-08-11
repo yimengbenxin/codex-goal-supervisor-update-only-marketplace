@@ -1,0 +1,12 @@
+{
+  "project_pytest": {
+    "cmd": "{python} -m pytest",
+    "description": "Run the project pytest suite.",
+    "timeout_sec": 120
+  },
+  "project_smoke_mvp": {
+    "cmd": "{python} scripts/smoke_mvp.py",
+    "description": "Run the project MVP smoke script when present.",
+    "timeout_sec": 120
+  }
+}

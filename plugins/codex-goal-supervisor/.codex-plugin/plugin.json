@@ -1,0 +1,35 @@
+{
+  "name": "codex-goal-supervisor",
+  "version": "2.3.6+codex.20260811151959",
+  "description": "Execution convergence for long Codex loops: preserve goals, prove progress, recover, and finish with evidence",
+  "author": {
+    "name": "Codex Goal Supervisor contributors"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Codex Goal Supervisor",
+    "shortDescription": "Keep long Codex loops aligned, verifiable, and convergent.",
+    "longDescription": "Codex Goal Supervisor is a low-noise administrative layer for long-running Codex work. It preserves durable direction in a concise North Star, keeps concrete execution in a separate Goal-mode contract, distinguishes activity from evidence-backed progress, restores the active Goal after bounded interruptions and compaction, preserves bounded context across large reads, and uses a sparse read-only LLM Judge only for high-value ambiguity. Optional specialist capabilities remain available without forcing tickets, receipts, or governance ceremony onto ordinary work.",
+    "developerName": "Codex Goal Supervisor contributors",
+    "category": "Productivity",
+    "capabilities": [
+      "Background advisory observation",
+      "Dual North Star and detailed Goal-contract alignment",
+      "Sparse read-only Codex CLI LLM Judge",
+      "Goal-return recovery after bounded interruptions and compaction",
+      "Hierarchical local context continuity for large reads",
+      "Evidence-backed final North Star regression certification",
+      "Silent product-write verification debt with completion-claim reminders",
+      "Optional bounded tickets",
+      "Optional company roles, Custodian, Auditor, and mark-only Janitor",
+      "Optional pinned specialist role library with exact upstream prompts",
+      "Versioned Git marketplace auto-update for new Codex sessions"
+    ],
+    "defaultPrompt": "Use Codex Goal Supervisor only where it creates net execution benefit; keep ordinary work unblocked."
+  },
+  "distributionEdition": "update-only",
+  "networkFeatures": {
+    "automaticUpdates": true,
+    "feedbackUpload": false
+  }
+}
