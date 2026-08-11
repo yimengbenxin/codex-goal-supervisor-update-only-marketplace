@@ -16,6 +16,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
@@ -117,6 +118,20 @@ def _kill_process_tree(process: subprocess.Popen[str]) -> None:
             pass
 
 
+def process_environment() -> dict[str, str]:
+    environment = {**os.environ, "PYTHONUTF8": "1", "PYTHONDONTWRITEBYTECODE": "1"}
+    proxies = urllib.request.getproxies()
+    for scheme in ("http", "https"):
+        lower = f"{scheme}_proxy"
+        upper = lower.upper()
+        if lower in environment or upper in environment:
+            continue
+        value = proxies.get(scheme)
+        if isinstance(value, str) and value.startswith(("http://", "https://")):
+            environment[upper] = value
+    return environment
+
+
 def run_process(command: list[str], timeout: int = DEFAULT_TIMEOUT_SECONDS) -> subprocess.CompletedProcess[str]:
     kwargs: dict[str, Any] = {
         "stdin": subprocess.DEVNULL,
@@ -125,7 +140,7 @@ def run_process(command: list[str], timeout: int = DEFAULT_TIMEOUT_SECONDS) -> s
         "text": True,
         "encoding": "utf-8",
         "errors": "replace",
-        "env": {**os.environ, "PYTHONUTF8": "1", "PYTHONDONTWRITEBYTECODE": "1"},
+        "env": process_environment(),
     }
     if os.name == "nt":
         kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
