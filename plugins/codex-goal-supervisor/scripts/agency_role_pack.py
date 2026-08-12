@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect the optional Agency Agents specialist role library."""
+"""Inspect and confidence-route the Agency Agents specialist role library."""
 
 from __future__ import annotations
 
@@ -182,12 +182,15 @@ def goal_brief(
     method = "none"
     confidence = "none"
     reason = "No expert role was requested."
+    eligible_choices: list[dict[str, Any]] = []
+    required_action = "continue_without_expert"
 
     if explicit_role:
         selected = resolve_role(manifest, explicit_role)
         method = "explicit_role"
         confidence = "user_or_main_thread_selected"
         reason = "An exact role was selected explicitly."
+        required_action = "load_selected_expert_and_apply_to_goal"
     elif auto_select and candidates:
         top = candidates[0]
         runner_score = int(candidates[1]["score"]) if len(candidates) > 1 else 0
@@ -201,11 +204,25 @@ def goal_brief(
                 "The leading role matched at least two task terms outside its raw prompt "
                 "and cleared the score and margin thresholds."
             )
+            required_action = "load_selected_expert_and_apply_to_goal"
         else:
-            reason = (
-                "No role cleared the bounded auto-selection threshold; continue without "
-                "expert injection or select one explicitly."
-            )
+            eligible_choices = [
+                row for row in candidates
+                if int(row.get("score", 0) or 0) >= 20
+                and len(row.get("strong_query_terms") or []) >= 2
+            ][:3]
+            if eligible_choices:
+                method = "low_confidence_candidates"
+                confidence = "low"
+                reason = (
+                    "Relevant expert candidates exist, but no single role cleared the automatic-use margin. "
+                    "Ask the user once to choose a candidate or skip expert input."
+                )
+                required_action = "ask_user_once_to_choose_candidate_or_skip"
+            else:
+                reason = (
+                    "No role has enough task-specific evidence to justify expert input; continue without it."
+                )
 
     selected_payload = None
     if selected:
@@ -214,8 +231,15 @@ def goal_brief(
             for key in ("id", "division", "name", "description", "vibe", "prompt_file", "prompt_sha256")
         }
 
+    status = (
+        "EXPERT_INPUT_READY"
+        if selected
+        else "EXPERT_CHOICE_REQUIRED"
+        if eligible_choices
+        else "NO_RELEVANT_EXPERT"
+    )
     return {
-        "status": "EXPERT_INPUT_READY" if selected else "NO_HIGH_CONFIDENCE_ROLE",
+        "status": status,
         "task": query.strip(),
         "selection": {
             "method": method,
@@ -223,7 +247,9 @@ def goal_brief(
             "reason": reason,
             "selected_role": selected_payload,
             "candidates": candidates,
+            "eligible_choices": eligible_choices,
         },
+        "required_action": required_action,
         "authority": "advisory_goal_input_only",
         "goal_authoring_contract": {
             "required_outputs": [
@@ -325,7 +351,7 @@ def main(argv: list[str] | None = None) -> int:
 
     goal_parser = sub.add_parser(
         "goal-brief",
-        help="Prepare optional task-specific expert input for the main Goal author.",
+        help="Prepare confidence-routed task-specific expert input for the main Goal author.",
     )
     goal_parser.add_argument("--query", required=True)
     goal_parser.add_argument("--role")

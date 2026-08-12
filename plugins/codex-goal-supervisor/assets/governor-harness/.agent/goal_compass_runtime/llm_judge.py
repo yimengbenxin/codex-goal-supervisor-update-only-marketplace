@@ -20,6 +20,7 @@ POLICY_VERSION = "1.0"
 MAX_CACHE_ENTRIES = 64
 DEFAULT_TIMEOUT_SECONDS = 45.0
 VERDICTS = {
+    "CONFIRM_GOAL_CHANGE",
     "CONFIRM_TARGETED_RAIL",
     "WARN_AND_RECHECK",
     "ALLOW_SCOPED_ACTION",
@@ -158,6 +159,18 @@ def _save_cache(cache_path: Path, fingerprint: str, result: dict[str, Any]) -> N
 
 
 def _prompt(packet: dict[str, Any]) -> str:
+    if packet.get("trigger") == "possible_north_star_change":
+        return (
+            "You are a sparse, read-only Goal-direction judge. Decide whether the latest user request "
+            "clearly establishes a durable product direction that is outside, rather than contained by, "
+            "the confirmed North Star and detailed Goal contract. CONFIRM_GOAL_CHANGE at high confidence "
+            "only when the request materially changes the enduring product outcome, audience, business "
+            "direction, or core deliverable. Do not confirm for a temporary request, question, implementation "
+            "detail, validation requirement, sequencing change, current module, allowed subgoal, or ambiguous "
+            "exploration. Uncertainty must return INSUFFICIENT_EVIDENCE or WARN_AND_RECHECK. Return only JSON "
+            "matching the supplied schema.\n\n"
+            + json.dumps(_safe_packet(packet), ensure_ascii=False, indent=2)
+        )
     return (
         "You are a sparse, read-only execution-convergence judge. Evaluate only the structured "
         "project metadata below. Do not assume access to source code. Distinguish useful exploration "

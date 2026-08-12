@@ -47,6 +47,21 @@ retain the configured interval guard.
 
 ## Distribution Contract
 
+Every completed local version must be published through the verified release
+command before it is considered delivered:
+
+```bash
+python3 scripts/publish_verified_release.py
+```
+
+The command refuses an uncommitted checkout, runs source and extracted-package
+verification, builds all three ZIP editions, pushes the canonical source and
+the separate full/update-only marketplaces, creates the GitHub Release with a
+SHA-256 manifest, and clones both remote marketplaces again to verify the
+published version. Use `--dry-run` to exercise the complete build and
+verification path without network writes. Do not publish on every file save:
+only a committed, fully verified release may reach client update channels.
+
 The default sources are:
 
 ```text
@@ -54,21 +69,9 @@ https://github.com/yimengbenxin/codex-goal-supervisor-marketplace.git
 https://github.com/yimengbenxin/codex-goal-supervisor-update-only-marketplace.git
 ```
 
-The self-hosted Tencent Git endpoint remains an optional migration/fallback
-channel. It is isolated from quant data and feedback event storage at:
+This edition uses its GitHub marketplace channel only. It contains no private feedback-server or asset-server endpoint.
 
-```text
- /var/www/goal-supervisor-marketplace/goal-supervisor-marketplace.git
-https://feedback.xn--15tf697cgrb.xyz/goal-supervisor-marketplace.git
-```
-
-Public clients can negotiate and fetch through `git-upload-pack`, including the
-shallow clone used by Codex. `git-receive-pack` stays disabled, so publishing is
-SSH-only and public clients cannot push.
-The update URL can be changed without changing project state by re-running the
-device configuration command with `--marketplace-url`.
-
-Build clean edition-specific marketplace trees before publishing:
+Build clean edition-specific marketplace trees before publishing:Build clean edition-specific marketplace trees before publishing:
 
 ```bash
 python3 scripts/build_plugin_release.py \

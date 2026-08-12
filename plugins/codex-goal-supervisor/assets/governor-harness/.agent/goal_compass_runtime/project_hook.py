@@ -41,6 +41,8 @@ from goal_compass_runtime.state_store import exclusive_file_lock, load_json, utc
 from goal_compass_runtime.convergence import (
     apply_observation as apply_convergence_observation,
     empty_state as empty_convergence_state,
+    external_prerequisite_stop_review,
+    record_blocker_scope_review,
     refresh as refresh_convergence_state,
 )
 from goal_compass_runtime.llm_judge import invoke as invoke_llm_judge
@@ -53,12 +55,16 @@ from goal_compass_runtime.context_continuity import (
     subagent_context,
 )
 from goal_compass_runtime.goal_return import (
+    goal_change_candidate,
+    goal_change_response,
     on_post_compact as goal_return_post_compact,
     on_pre_compact as goal_return_pre_compact,
     on_session_start as goal_return_session_start,
     on_stop as goal_return_stop,
     on_tool_event as goal_return_tool_event,
     on_user_prompt as goal_return_user_prompt,
+    record_goal_change_confirmation,
+    resolve_goal_change_confirmation,
 )
 
 
@@ -339,13 +345,46 @@ def stop_completion_context(event: dict[str, Any]) -> str | None:
     )
 
 
+def stop_stall_recovery(event: dict[str, Any]) -> str | None:
+    """Force one bounded Goal-wide review before an external prerequisite stops work."""
+    north = load_json(NORTH_STAR, {})
+    if not north.get("confirmed"):
+        return None
+    observed_at = utc_now_iso()
+    state = refresh_convergence_state(
+        load_json(CONVERGENCE_STATE, empty_convergence_state()),
+        north_star=north,
+        phase=load_json(PROGRAM_PHASE, {}),
+        ticket=load_json(CURRENT, {}),
+        updated_at=observed_at,
+    )
+    review = external_prerequisite_stop_review(
+        state,
+        _assistant_message(event),
+        stop_hook_active=bool(event.get("stop_hook_active")),
+    )
+    if not review.get("should_continue"):
+        return None
+    state = record_blocker_scope_review(state, review=review, observed_at=observed_at)
+    try:
+        with exclusive_file_lock(CONVERGENCE_LOCK, timeout=0.2, stale_seconds=30.0):
+            write_json(CONVERGENCE_STATE, state)
+    except (OSError, RuntimeError, json.JSONDecodeError):
+        pass
+    return str(review.get("reason") or "").strip() or None
+
+
 def output(
     *,
     deny: str | None = None,
     advisory: str | None = None,
     context: str | None = None,
+    stop_block: str | None = None,
     hook_event_name: str | None = None,
 ) -> None:
+    if stop_block:
+        print(json.dumps({"decision": "block", "reason": stop_block}, ensure_ascii=False))
+        return
     event = hook_event_name or ("PreToolUse" if deny or advisory else "PostToolUse")
     if deny:
         payload = {"hookEventName": event, "permissionDecision": "deny", "permissionDecisionReason": deny}
@@ -374,6 +413,9 @@ def handle_context_event(event: dict[str, Any]) -> str | None:
     if phase == "SubagentStart":
         return subagent_context(PROJECT_ROOT, CONTEXT_STATE, CONTEXT_CAPSULE, event)
     if phase == "UserPromptSubmit":
+        goal_change = goal_change_confirmation_context(north, convergence, event)
+        if goal_change:
+            return goal_change
         return goal_return_user_prompt(
             GOAL_RETURN_STATE, GOAL_RETURN_LOCK, GOAL_RETURN_EVENTS,
             north, convergence, event,
@@ -393,6 +435,82 @@ def handle_context_event(event: dict[str, Any]) -> str | None:
         if is_context_read_event(event):
             return record_context_read(PROJECT_ROOT, CONTEXT_STATE, CONTEXT_LOCK, CONTEXT_CAPSULE, event)
     return None
+
+
+def goal_change_confirmation_context(
+    north: dict[str, Any],
+    convergence: dict[str, Any],
+    event: dict[str, Any],
+) -> str | None:
+    """Ask once before changing a confirmed long-running project direction."""
+    prompt = str(event.get("prompt") or "").strip()
+    response = goal_change_response(prompt)
+    if response:
+        resolved = resolve_goal_change_confirmation(
+            GOAL_RETURN_STATE, GOAL_RETURN_LOCK, GOAL_RETURN_EVENTS,
+            north, event, response,
+        )
+        if not resolved:
+            return None
+        if response == "DISMISSED":
+            return (
+                "[Goal Direction Check] The user declined the proposed North Star change. "
+                "Preserve the current North Star and detailed Goal contract; treat the request only within the scope the user confirmed."
+            )
+        return (
+            "[Goal Direction Check] The user confirmed a durable direction change. Before continuing implementation, "
+            "rebuild the concise North Star and the detailed Goal-mode contract together from the confirmed direction, "
+            "then use `goal-set --replace-existing --require-detailed`. Do not leave the old Goal contract attached to the new North Star."
+        )
+
+    candidate = goal_change_candidate(north, convergence, prompt)
+    if not candidate:
+        return None
+    result: dict[str, Any] = {}
+    confirmed = bool(candidate.get("explicit"))
+    if not confirmed:
+        if os.environ.get("GOAL_SUPERVISOR_DISABLE_LLM_JUDGE") == "1":
+            return None
+        stack = convergence.get("goal_stack") if isinstance(convergence.get("goal_stack"), dict) else {}
+        result = invoke_llm_judge(
+            {
+                "trigger": "possible_north_star_change",
+                "north_star_goal": north.get("goal"),
+                "goal_contract": stack.get("goal_contract"),
+                "success_criteria": [
+                    row.get("criterion") for row in stack.get("l1_success_criteria", [])
+                    if isinstance(row, dict) and row.get("criterion")
+                ],
+                "current_stage": stack.get("l2_current_stage"),
+                "current_action": stack.get("l3_current_action"),
+                "appeal": "Latest user request: " + str(candidate.get("summary") or ""),
+                "consequence": "A false prompt creates process noise; a missed durable change leaves North Star and Goal mode stale.",
+            },
+            schema_path=LLM_JUDGE_SCHEMA,
+            cache_path=LLM_JUDGE_CACHE,
+            timeout_seconds=8.0,
+        )
+        confirmed = result.get("verdict") == "CONFIRM_GOAL_CHANGE" and result.get("confidence") == "high"
+    if not confirmed:
+        return None
+    first = record_goal_change_confirmation(
+        GOAL_RETURN_STATE, GOAL_RETURN_LOCK, GOAL_RETURN_EVENTS,
+        north, event, candidate, result,
+    )
+    if not first:
+        return None
+    summary = str(candidate.get("summary") or "")
+    if re.search(r"[\u4e00-\u9fff]", prompt):
+        return (
+            "[Goal Direction Check] 这条需求明显可能形成现有北极星之外的新长期方向："
+            f"{summary} 请只向用户确认一次：是否确认更新北极星指标？"
+            "用户确认前不得修改 North Star 或详细 Goal；确认后必须同步重建两者，不能只改一句北极星。"
+        )
+    return (
+        "[Goal Direction Check] This request clearly may establish a durable direction outside the current North Star: "
+        f"{summary} Ask the user once whether to update the North Star. Do not change the North Star or detailed Goal "
+        "before confirmation; after confirmation, rebuild both together."
+    )
 
 
 def deviation_context(event: dict[str, Any], paths: list[str]) -> dict[str, Any] | None:
@@ -646,8 +764,11 @@ def main() -> int:
     if context_message:
         output(context=context_message, hook_event_name=phase)
     if phase == "Stop":
-        reminder = stop_completion_context(event)
-        if reminder:
+        stall_recovery = stop_stall_recovery(event)
+        reminder = stop_completion_context(event) if not stall_recovery else None
+        if stall_recovery:
+            output(stop_block=stall_recovery)
+        elif reminder:
             output(context=reminder, hook_event_name="Stop")
         else:
             print("{}")

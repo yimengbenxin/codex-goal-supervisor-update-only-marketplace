@@ -5,7 +5,7 @@
   "role_count": 270,
   "division_count": 17,
   "raw_prompt_policy": "byte_for_byte_upstream_snapshot",
-  "selection_policy": "optional_main_thread_choice",
+  "selection_policy": "high_confidence_required_low_confidence_user_choice",
   "authority": "expert_reference_not_final_decision_maker",
   "source": {
     "repository": "https://github.com/msitarzewski/agency-agents",

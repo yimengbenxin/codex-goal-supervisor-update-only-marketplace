@@ -18,6 +18,7 @@ MAX_COLLABORATION_ROUNDS = 32
 MAX_GOAL_MODULES = 16
 MAX_GOAL_LIST_ITEMS = 8
 MAX_GOAL_TEXT = 360
+MAX_GOAL_COVERAGE_LABELS = 8
 COLLABORATION_PROGRESS_TRANSITIONS = {
     "BLOCKED_WITH_EVIDENCE",
     "DELIVERED",
@@ -76,6 +77,7 @@ def empty_state() -> dict[str, Any]:
         "recovery": {
             "latest_checkpoint": None,
             "blocked_reason": None,
+            "blocker_scope_review": None,
             "recommended_action": "select_highest_value_action",
         },
         "judge": {
@@ -165,6 +167,132 @@ def goal_contract_projection(north_star: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+_STOP_STALL_MARKERS = (
+    "进入安全暂停", "安全暂停", "暂停执行", "暂停项目", "等待你", "等你", "等待用户",
+    "等用户", "需要你操作", "需要用户操作", "人工动作", "人工操作", "恢复条件",
+    "才能继续", "才可继续", "再告诉我即可继续", "醒来后", "不再空转",
+    "pause execution", "pause the project", "waiting for you", "waiting for the user",
+    "requires human action", "requires manual action", "blocked until", "cannot continue until",
+    "resume when", "stop here",
+)
+_EXTERNAL_PREREQUISITE_MARKERS = (
+    "wi-fi", "wifi", "真机", "物理设备", "物理打开", "人工", "用户操作", "登录",
+    "授权", "凭证", "插入设备", "连接设备", "打开设备", "点击确认", "签名",
+    "external device", "physical device", "manual", "human", "log in", "login",
+    "credential", "connect the device", "turn on", "click", "signing",
+)
+_CONTINUING_MARKERS = (
+    "无需等待", "不等待", "不会等待", "继续推进", "继续执行", "继续下推", "同时继续",
+    "不再等待", "without waiting", "not waiting", "keep going", "continue execution",
+    "continue with", "continue the remaining",
+)
+
+
+def _goal_coverage(state: dict[str, Any]) -> dict[str, Any]:
+    stack = state.get("goal_stack") if isinstance(state.get("goal_stack"), dict) else {}
+    contract = stack.get("goal_contract") if isinstance(stack.get("goal_contract"), dict) else {}
+    modules = [row for row in contract.get("modules", []) if isinstance(row, dict)]
+    acceptance = [row for row in contract.get("final_acceptance", []) if isinstance(row, dict)]
+    labels: list[str] = []
+    for row in modules:
+        label = str(row.get("name") or row.get("node_id") or "").strip()
+        if label and label not in labels:
+            labels.append(label[:MAX_GOAL_TEXT])
+    if not labels:
+        for row in acceptance:
+            label = str(row.get("criterion") or "").strip()
+            if label and label not in labels:
+                labels.append(label[:MAX_GOAL_TEXT])
+    return {
+        "module_count": int(contract.get("module_count_total", len(modules)) or 0),
+        "acceptance_count": len(acceptance),
+        "success_criteria_count": len([
+            row for row in stack.get("l1_success_criteria", []) if isinstance(row, dict)
+        ]),
+        "labels": labels[:MAX_GOAL_COVERAGE_LABELS],
+        "projection_truncated": bool(contract.get("projection_truncated")),
+    }
+
+
+def external_prerequisite_stop_review(
+    state: dict[str, Any] | None,
+    message: str,
+    *,
+    stop_hook_active: bool = False,
+) -> dict[str, Any]:
+    """Require one Goal-wide scope check before a local prerequisite stops work.
+
+    The check is deliberately lexical and narrow. It never decides which work
+    is executable and never loops: Codex marks the forced follow-up Stop with
+    ``stop_hook_active``. The follow-up may stop normally after proving that all
+    remaining Goal paths share the same blocker.
+    """
+    row = state or empty_state()
+    lower = str(message or "").strip().lower()
+    completion = row.get("goal_completion") if isinstance(row.get("goal_completion"), dict) else {}
+    stack = row.get("goal_stack") if isinstance(row.get("goal_stack"), dict) else {}
+    if (
+        stop_hook_active
+        or not lower
+        or not stack.get("l0_final_goal")
+        or completion.get("status") == "CERTIFIED_COMPLETE"
+        or any(marker in lower for marker in _CONTINUING_MARKERS)
+        or not any(marker in lower for marker in _STOP_STALL_MARKERS)
+        or not any(marker in lower for marker in _EXTERNAL_PREREQUISITE_MARKERS)
+    ):
+        return {"should_continue": False, "status": "NO_SCOPE_REVIEW"}
+
+    coverage = _goal_coverage(row)
+    if not any(
+        int(coverage.get(key, 0) or 0) > 0
+        for key in ("module_count", "acceptance_count", "success_criteria_count")
+    ):
+        return {"should_continue": False, "status": "INSUFFICIENT_GOAL_STRUCTURE"}
+    labels = ", ".join(coverage["labels"])
+    coverage_text = labels or str(stack.get("l0_final_goal") or "confirmed North Star")[:MAX_GOAL_TEXT]
+    if coverage.get("projection_truncated"):
+        coverage_text += ", plus additional Goal modules"
+    reason = (
+        "[Goal-wide blocker scope check] One external or manual prerequisite was treated as a reason to stop "
+        "the whole project, but the confirmed North Star is not certified complete. Treat that prerequisite "
+        "as DEFERRED_LOCAL until its scope is proven. Re-read the full Goal contract and classify every unfinished "
+        "module or acceptance path as EXECUTABLE, DEPENDENCY_BLOCKED, HUMAN_BLOCKED, or COMPLETE. Continue the "
+        "highest-value executable item without inventing substitute work or pretending the deferred acceptance "
+        "passed. Stop only if every remaining Goal path is transitively blocked; then report one exact human action "
+        "and the evidence that no independent path remains. Goal coverage snapshot: " + coverage_text + "."
+    )
+    return {
+        "should_continue": True,
+        "status": "REQUIRES_SCOPE_CHECK",
+        "reason": reason,
+        "coverage": coverage,
+    }
+
+
+def record_blocker_scope_review(
+    state: dict[str, Any] | None,
+    *,
+    review: dict[str, Any],
+    observed_at: str,
+) -> dict[str, Any]:
+    """Persist bounded blocker metadata without storing assistant text."""
+    row = copy.deepcopy(state or empty_state())
+    recovery = row.setdefault("recovery", {})
+    coverage = review.get("coverage") if isinstance(review.get("coverage"), dict) else {}
+    recovery["blocked_reason"] = None
+    recovery["blocker_scope_review"] = {
+        "status": "REQUIRES_SCOPE_CHECK",
+        "kind": "EXTERNAL_OR_MANUAL_PREREQUISITE",
+        "observed_at": observed_at,
+        "goal_module_count": int(coverage.get("module_count", 0) or 0),
+        "goal_acceptance_count": int(coverage.get("acceptance_count", 0) or 0),
+        "goal_success_criteria_count": int(coverage.get("success_criteria_count", 0) or 0),
+    }
+    recovery["recommended_action"] = "continue_highest_value_unblocked_goal_work_or_prove_global_blocker"
+    row["updated_at"] = observed_at
+    return row
+
+
 def _acceptance_criteria(north_star: dict[str, Any], ticket: dict[str, Any]) -> list[dict[str, Any]]:
     criteria: list[dict[str, Any]] = []
     definition = north_star.get("goal_definition") if isinstance(north_star.get("goal_definition"), dict) else {}
@@ -237,6 +365,10 @@ def refresh(
     defaults = empty_state()
     for key, value in defaults.items():
         row.setdefault(key, copy.deepcopy(value))
+    recovery = row.get("recovery") if isinstance(row.get("recovery"), dict) else {}
+    for key, value in defaults["recovery"].items():
+        recovery.setdefault(key, copy.deepcopy(value))
+    row["recovery"] = recovery
     previous = row.get("goal_stack") if isinstance(row.get("goal_stack"), dict) else {}
     row["goal_stack"] = build_goal_stack(
         north_star,

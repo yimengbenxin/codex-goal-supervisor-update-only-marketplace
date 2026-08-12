@@ -138,7 +138,7 @@ def build_pack(source: Path, destination: Path) -> dict[str, Any]:
         "role_count": len(rows),
         "division_count": len({row["division"] for row in rows}),
         "raw_prompt_policy": "byte_for_byte_upstream_snapshot",
-        "selection_policy": "optional_main_thread_choice",
+        "selection_policy": "high_confidence_required_low_confidence_user_choice",
         "authority": "expert_reference_not_final_decision_maker",
         "source": {
             "repository": SOURCE_REPO,

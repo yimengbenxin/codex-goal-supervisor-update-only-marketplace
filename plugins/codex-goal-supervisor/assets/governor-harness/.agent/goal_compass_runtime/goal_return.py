@@ -30,6 +30,7 @@ MAX_INTERRUPTS = 32
 MAX_SUMMARY_CHARS = 240
 MAX_PATHS = 24
 MAX_CONTEXT_CHARS = 1400
+MAX_GOAL_CHANGE_CANDIDATES = 16
 
 TEMPORARY_BRANCH = "TEMPORARY_BRANCH"
 QUESTION_ONLY = "QUESTION_ONLY"
@@ -53,9 +54,42 @@ _PERSISTENT_MARKERS = (
     "from now on", "always", "for the rest of", "persistent constraint",
 )
 _GOAL_REPLACEMENT_MARKERS = (
-    "替换北极星", "修改北极星", "更换总目标", "把总目标改成", "重新设定目标",
+    "替换北极星", "修改北极星", "更改北极星", "更新北极星", "把北极星改成",
+    "将北极星改为", "北极星调整为", "更换总目标", "把总目标改成", "重新设定目标",
     "replace the north star", "replace the goal", "change the north star",
     "new primary goal",
+)
+_DURABLE_DIRECTION_MARKERS = (
+    "长期", "以后", "今后", "从现在起", "接下来主要", "未来都", "持续转向",
+    "long-term", "long term", "from now on", "going forward", "future direction",
+)
+_STRATEGIC_DIRECTION_MARKERS = (
+    "北极星", "总目标", "核心目标", "长期方向", "产品方向", "产品定位", "战略方向",
+    "主要目标", "工作重心", "核心交付", "改为", "转向", "不再做",
+    "north star", "primary goal", "core goal", "product direction", "product positioning",
+    "strategic direction", "main focus", "core deliverable", "pivot", "shift to", "instead of",
+)
+_DIRECTION_CONTINUITY_MARKERS = (
+    "继续围绕", "仍然围绕", "保持现有", "保持当前", "维持现有", "维持当前",
+    "方向不变", "目标不变", "北极星不变", "不改变北极星",
+    "continue to focus on", "remain focused on", "keep the current", "maintain the current",
+    "direction remains", "goal remains", "north star remains",
+)
+_GOAL_CHANGE_CONFIRM_MARKERS = (
+    "确认更新北极星", "确认修改北极星", "确认更换北极星", "确认更新总目标",
+    "确认更换总目标", "同意更新北极星", "confirm the north star change",
+    "confirm updating the north star", "yes, update the north star",
+)
+_GOAL_CHANGE_DISMISS_MARKERS = (
+    "不更新北极星", "不要修改北极星", "维持原北极星", "保持原北极星",
+    "不更换总目标", "keep the current north star", "do not change the north star",
+    "do not update the north star",
+)
+_GOAL_CHANGE_GENERIC_PHRASES = (
+    *_DURABLE_DIRECTION_MARKERS,
+    *_STRATEGIC_DIRECTION_MARKERS,
+    "项目", "任务", "方向", "目标", "重点", "主要", "核心", "更新", "调整",
+    "project", "task", "direction", "goal", "focus", "main", "core", "update", "change",
 )
 _GOAL_CONTINUATION_MARKERS = {
     "继续", "继续执行", "继续推进", "回到总目标", "回到原目标", "按总目标继续",
@@ -125,17 +159,198 @@ def goal_generation_id(north_star: dict[str, Any]) -> str | None:
 
 def classify_prompt(prompt: str) -> str:
     normalized = " ".join(prompt.lower().split())
+    if prompt.rstrip().endswith(("?", "？")):
+        return QUESTION_ONLY
     if any(marker in normalized for marker in _GOAL_REPLACEMENT_MARKERS):
         return GOAL_REPLACEMENT_REQUEST
     if any(marker in normalized for marker in _PERSISTENT_MARKERS):
         return PERSISTENT_CONSTRAINT
     if normalized in _GOAL_CONTINUATION_MARKERS:
         return UNSCOPED
-    if prompt.rstrip().endswith(("?", "？")):
-        return QUESTION_ONLY
     if any(marker in normalized for marker in _TEMPORARY_MARKERS):
         return TEMPORARY_BRANCH
     return UNSCOPED
+
+
+def _long_running_goal(north_star: dict[str, Any], convergence: dict[str, Any]) -> bool:
+    if not north_star.get("confirmed") or not str(north_star.get("goal") or "").strip():
+        return False
+    definition = north_star.get("goal_definition") if isinstance(north_star.get("goal_definition"), dict) else {}
+    process = definition.get("process") if isinstance(definition.get("process"), dict) else {}
+    modules = [row for row in process.get("nodes", []) if isinstance(row, dict)]
+    final_acceptance = definition.get("final_acceptance") if isinstance(definition.get("final_acceptance"), list) else []
+    objective_chars = len(str(north_star.get("goal_mode_objective") or ""))
+    stack = convergence.get("goal_stack") if isinstance(convergence.get("goal_stack"), dict) else {}
+    projected = stack.get("goal_contract") if isinstance(stack.get("goal_contract"), dict) else {}
+    projected_modules = [row for row in projected.get("modules", []) if isinstance(row, dict)]
+    success_criteria = [row for row in stack.get("l1_success_criteria", []) if isinstance(row, dict)]
+    return bool(
+        objective_chars >= 800
+        or (len(modules) >= 2 and len(final_acceptance) >= 1)
+        or (len(projected_modules) >= 2 and len(success_criteria) >= 1)
+    )
+
+
+def _goal_scope_text(north_star: dict[str, Any], convergence: dict[str, Any]) -> str:
+    definition = north_star.get("goal_definition") if isinstance(north_star.get("goal_definition"), dict) else {}
+    stack = convergence.get("goal_stack") if isinstance(convergence.get("goal_stack"), dict) else {}
+    values: list[str] = [
+        str(north_star.get("goal") or ""),
+        str(north_star.get("goal_mode_objective") or ""),
+        json.dumps(definition, ensure_ascii=False, default=str),
+        json.dumps(stack.get("goal_contract") or {}, ensure_ascii=False, default=str),
+    ]
+    return " ".join(values).casefold()
+
+
+def _content_grams(value: str) -> set[str]:
+    normalized = value.casefold()
+    for phrase in _GOAL_CHANGE_GENERIC_PHRASES:
+        normalized = normalized.replace(phrase, " ")
+    latin = {term for term in re.findall(r"[a-z0-9][a-z0-9_+.-]{2,}", normalized) if len(term) >= 3}
+    cjk_runs = re.findall(r"[\u4e00-\u9fff]{2,}", normalized)
+    cjk = {
+        run[index:index + size]
+        for run in cjk_runs
+        for size in (2, 3, 4)
+        for index in range(max(0, len(run) - size + 1))
+    }
+    return latin | cjk
+
+
+def _obviously_contained(prompt: str, north_star: dict[str, Any], convergence: dict[str, Any]) -> bool:
+    scope = _goal_scope_text(north_star, convergence)
+    grams = _content_grams(prompt)
+    if not grams:
+        return False
+    overlap = sum(1 for gram in grams if gram in scope)
+    return overlap >= 3 and overlap / len(grams) >= 0.7
+
+
+def goal_change_response(prompt: str) -> str | None:
+    normalized = " ".join(prompt.casefold().split())
+    if not normalized or len(normalized) > 80 or prompt.rstrip().endswith(("?", "？")):
+        return None
+    if any(marker in normalized for marker in _GOAL_CHANGE_CONFIRM_MARKERS):
+        return "CONFIRMED"
+    if any(marker in normalized for marker in _GOAL_CHANGE_DISMISS_MARKERS):
+        return "DISMISSED"
+    return None
+
+
+def goal_change_candidate(
+    north_star: dict[str, Any],
+    convergence: dict[str, Any],
+    prompt: str,
+) -> dict[str, Any] | None:
+    """Return only a strict, durable direction-change candidate."""
+    prompt = prompt.strip()
+    normalized = " ".join(prompt.casefold().split())
+    if not prompt or not _long_running_goal(north_star, convergence):
+        return None
+    if goal_change_response(prompt) or normalized in _GOAL_CONTINUATION_MARKERS:
+        return None
+    kind = classify_prompt(prompt)
+    if kind in {TEMPORARY_BRANCH, QUESTION_ONLY} or prompt.rstrip().endswith(("?", "？")):
+        return None
+    explicit = kind == GOAL_REPLACEMENT_REQUEST
+    if not explicit and any(marker in normalized for marker in _DIRECTION_CONTINUITY_MARKERS):
+        return None
+    durable = any(marker in normalized for marker in _DURABLE_DIRECTION_MARKERS)
+    strategic = any(marker in normalized for marker in _STRATEGIC_DIRECTION_MARKERS)
+    if not explicit and not (durable and strategic):
+        return None
+    if not explicit and _obviously_contained(prompt, north_star, convergence):
+        return None
+    summary = _text(prompt)
+    generation = goal_generation_id(north_star)
+    identifier = hashlib.sha256(f"{generation}\n{summary.casefold()}".encode("utf-8")).hexdigest()[:20]
+    return {
+        "candidate_id": identifier,
+        "summary": summary,
+        "explicit": explicit,
+        "classification": kind,
+        "goal_generation_id": generation,
+    }
+
+
+def record_goal_change_confirmation(
+    state_path: Path,
+    lock_path: Path,
+    events_path: Path,
+    north_star: dict[str, Any],
+    event: dict[str, Any],
+    candidate: dict[str, Any],
+    judge: dict[str, Any] | None = None,
+) -> bool:
+    """Record one project-level pending confirmation per Goal generation."""
+    def mutate(state: dict[str, Any], _: dict[str, Any], generation: str | None, now: str) -> tuple[bool, dict[str, Any]]:
+        rows = [row for row in state.get("goal_change_candidates", []) if isinstance(row, dict)]
+        if any(
+            row.get("candidate_id") == candidate.get("candidate_id")
+            and row.get("goal_generation_id") == generation
+            for row in rows
+        ):
+            return False, {"candidate_id": candidate.get("candidate_id"), "recorded": False, "reason": "already_seen"}
+        if any(
+            row.get("goal_generation_id") == generation
+            and row.get("status") == "CONFIRMATION_REQUESTED"
+            for row in rows
+        ):
+            return False, {
+                "candidate_id": candidate.get("candidate_id"),
+                "recorded": False,
+                "reason": "confirmation_already_pending",
+            }
+        rows.append({
+            "candidate_id": candidate.get("candidate_id"),
+            "goal_generation_id": generation,
+            "session_id": _session_id(event),
+            "summary": candidate.get("summary"),
+            "status": "CONFIRMATION_REQUESTED",
+            "requested_at": now,
+            "resolved_at": None,
+            "judge": {
+                key: (judge or {}).get(key)
+                for key in ("status", "verdict", "confidence", "fingerprint")
+                if (judge or {}).get(key) is not None
+            },
+        })
+        state["goal_change_candidates"] = rows[-MAX_GOAL_CHANGE_CANDIDATES:]
+        return True, {"candidate_id": candidate.get("candidate_id"), "recorded": True}
+
+    try:
+        return bool(_update(state_path, lock_path, events_path, north_star, event, "GOAL_CHANGE_CONFIRMATION", mutate))
+    except (OSError, RuntimeError, json.JSONDecodeError):
+        return False
+
+
+def resolve_goal_change_confirmation(
+    state_path: Path,
+    lock_path: Path,
+    events_path: Path,
+    north_star: dict[str, Any],
+    event: dict[str, Any],
+    resolution: str,
+) -> dict[str, Any] | None:
+    def mutate(state: dict[str, Any], _: dict[str, Any], generation: str | None, now: str) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+        rows = [row for row in state.get("goal_change_candidates", []) if isinstance(row, dict)]
+        target = next((
+            row for row in reversed(rows)
+            if row.get("goal_generation_id") == generation
+            and row.get("status") == "CONFIRMATION_REQUESTED"
+        ), None)
+        if not target:
+            return None, {"resolved": False, "resolution": resolution}
+        target["status"] = resolution
+        target["resolved_at"] = now
+        state["goal_change_candidates"] = rows[-MAX_GOAL_CHANGE_CANDIDATES:]
+        return dict(target), {"resolved": True, "candidate_id": target.get("candidate_id"), "resolution": resolution}
+
+    try:
+        return _update(state_path, lock_path, events_path, north_star, event, "GOAL_CHANGE_RESOLUTION", mutate)
+    except (OSError, RuntimeError, json.JSONDecodeError):
+        return None
 
 
 def _checkpoint(convergence: dict[str, Any]) -> dict[str, Any]:

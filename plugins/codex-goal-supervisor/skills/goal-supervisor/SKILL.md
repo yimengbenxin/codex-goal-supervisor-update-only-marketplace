@@ -24,7 +24,9 @@ still owns the work and final judgment.
 - A confirmed `.agent/north_star_goal.json` is project-owned. Do not rewrite it unless the user explicitly asks.
 - If `.agent/north_star_goal.json` already contains a confirmed goal, reuse it exactly. Do not call `goal-set` unless the user explicitly asks to replace or create that project goal.
 - If a confirmed North Star already exists, preserve it exactly and reuse its stored Goal-mode contract. If no confirmed North Star exists, build the detailed contract, run `goal-set --require-detailed`, and then start Goal mode. Never claim activation is complete when only one of these two states exists.
+- During a long-running confirmed Goal, do not let the North Star become stale when the user clearly introduces a different durable product direction. A temporary request, question, implementation detail, sequencing change, or subgoal already contained by the current North Star stays silent. For a non-explicit direction change, ask only after the sparse Judge confirms at high confidence that it is durable and outside both the North Star and detailed Goal. Ask once per Goal generation across session changes or compaction, never auto-rewrite, and keep execution available. If the user confirms, rebuild the concise North Star and detailed Goal-mode contract together with `goal-set --replace-existing --require-detailed`; never replace only the one-line North Star.
 - Plugin auto-update is a separate device-level capability. It must never activate a project, alter a North Star, or run from project hooks. When the user explicitly asks to enable or repair automatic updates, run `scripts/configure_plugin_auto_update.py`; otherwise leave device scheduling unchanged.
+- A maintainer-created local version is not complete until `scripts/publish_verified_release.py` reports `PUBLISHED_AND_VERIFIED`. The command must run only after the release commit is clean; it verifies source and extracted ZIPs, publishes the canonical repository plus the full and update-only marketplaces, uploads all three edition ZIPs and their SHA-256 manifest, and reads the remote channels back. Never stream uncommitted file saves to clients.
 
 ## Two Layers
 
@@ -51,6 +53,13 @@ An exact project-authored North Star deviation has persistent incident semantics
 Ambiguous semantic judgments are warnings, never hidden approvals or denials. Only exact project-authored anti-goals or drift boundaries may enter this three-confirmation rail. Hook failure is fail-open and must not become product evidence.
 
 For a confirmed Goal, `UserPromptSubmit` also creates a bounded Goal-return branch unless the user explicitly replaces the Goal, promotes a persistent constraint, or simply asks to continue. `Stop` closes a completed branch. After compaction, `SessionStart` restores the current Goal checkpoint and treats closed branches as tombstoned history. A first exact-path replay is silent context, a second is a warning, and a third may reach the sparse Judge. Do not expose this bookkeeping as a ticket or ask the user to manage it.
+
+If a response tries to stop an unfinished confirmed Goal only because of one
+manual, physical-device, login, or other external prerequisite, `Stop` forces
+one bounded Goal-wide scope check. Defer the local prerequisite, inspect every
+unfinished Goal module or acceptance path, and continue the highest-value
+independent work. If all remaining paths are transitively blocked, report one
+exact human action and stop normally; `stop_hook_active` prevents a loop.
 
 ### 2. Explicit Optional Capabilities
 
@@ -153,21 +162,22 @@ Company mode is optional and task-shaped. Select only roles with distinct inputs
 ### Optional Specialist Role Library
 
 The plugin provides a pinned, MIT-licensed snapshot of the Agency Agents role
-library as an optional expert reference. The complete offline ZIP bundles it;
-a marketplace install downloads it into a user-level cache only after an
-explicit role-library command. It is a library for the main thread,
-not a new decision layer and not an automatic roster.
+library as an expert reference. Complete release ZIPs and edition-specific
+marketplaces bundle it. It is a library for the main thread, not a new decision
+layer and not an automatic company roster.
 
 - The upstream role prompts are preserved in full, including personality,
   workflows, default responsibilities, examples, deliverables, and metrics.
-- Never inject all profiles and never silently select one. The main thread may
-  search candidates, inspect the complete raw prompt, then choose to use it
-  unchanged, combine it with the frozen department contract, or ignore it.
+- Never inject all profiles. For a new detailed Goal, a high-confidence match
+  must be loaded and used as expert input without asking the user. A
+  low-confidence match asks the user once to choose an eligible role or skip.
+  No relevant match stays silent. Outside Goal authoring, ordinary searches
+  return candidates and do not silently add company roles.
 - A selected profile supplies specialist perspective. It cannot silently alter
   the North Star, Goal-mode contract, ticket acceptance, allowed paths, company
   roster, or main-thread authority.
 - Do not copy the role pack into the user project. It remains a plugin asset and
-  is read only after an explicit specialist lookup.
+  is read only when confidence routing or an explicit specialist lookup needs it.
 - The source commit, exact prompt hash, and MIT notice remain available in the
   manifest. Do not silently rewrite an upstream prompt. A demonstrable upstream
   error must be represented as a separate, visible local override.
@@ -187,10 +197,13 @@ python3 scripts/agency_role_pack.py verify
 prompt. The execution thread remains responsible for choosing the role and for
 checking time-sensitive professional claims against current project evidence.
 
-When a detailed Goal would materially benefit from industry knowledge, the main
-thread may explicitly call `goal-brief`. High-confidence auto-selection requires
-multiple task terms outside the raw prompt plus a clear score margin; otherwise
-zero expert input is the correct result. The selected expert returns only
+When authoring a new detailed Goal for an identifiable industry, the main thread
+must run one local `goal-brief --auto-select` match. A high-confidence result is
+used directly: load the exact selected prompt with `show` and incorporate its
+task-specific input before finalizing the Goal. A low-confidence result asks the
+user once to choose one eligible candidate or skip expert input. A result with
+no relevant expert stays silent and continues without one. Explicit user or
+main-thread role selection remains valid. The selected expert returns only
 task-specific domain modules, dependencies, acceptance evidence, failure modes,
 reusable tools, user-facing commercial/compliance questions, and forbidden
 assumptions. The main thread remains the sole Goal author and preserves the

@@ -125,6 +125,13 @@ Codex Goal Supervisor deliberately does **not** become the project itself:
 | `update-only` | You want automatic plugin updates but no remote feedback capability in the package | Included, edition-pinned | Physically absent |
 | `full` | You want updates and the option to explicitly contribute redacted plugin diagnostics | Included, edition-pinned | Included but off by default and project-consent gated |
 
+For public, team, or enterprise distribution that must never contact the
+feedback server, use `update-only`. Its feedback upload client, receiver,
+credential handling, and remote endpoint code are physically absent; automatic
+plugin updates use the public GitHub marketplace, and bundled runtime assets
+contain no private feedback-server or asset-server endpoint. Use `offline` when
+update traffic must also be absent.
+
 Download the three hash-verifiable artifacts from the [latest release](https://github.com/yimengbenxin/codex-goal-supervisor/releases/latest). Installing the plugin does not activate it inside every project; project installation remains explicit.
 
 [Licensed under Apache-2.0](LICENSE). Contributions and reproducible bug reports
@@ -158,6 +165,7 @@ North Star setup is not part of the silent observer. When the user explicitly ac
 | Destructive `git reset`/`git clean` | Block |
 | Direct control-state edit | Block |
 | Exact active-ticket forbidden or immutable path | Block |
+| A local manual/device prerequisite is used to stop an unfinished confirmed Goal | Force one Goal-wide blocker-scope check; continue independent work or prove every remaining path is blocked |
 | Hook/runtime failure | Fail open; report once |
 
 Warnings do not require a ticket and do not stop execution. Generic semantic guesses never become hidden denials. The LLM Judge is invoked only for a pending targeted rail, an explicit high-cost ambiguous action, an appeal with new evidence, or two completed iterations without evidence progress. Results are structured and cached; missing, malformed, or timed-out judgment fails open.
@@ -165,6 +173,7 @@ Warnings do not require a ticket and do not stop execution. Generic semantic gue
 ## Optional Capabilities
 
 - **North Star:** durable project direction; never silently rewritten. Alignment against this layer answers whether the work is still heading toward the right product outcome.
+- **Durable direction changes:** on a long-running Goal, a clearly new product direction outside the current North Star is confirmed with the user once per Goal generation before any rewrite, including across session changes or compaction. Temporary requests, questions, and already-contained subgoals remain silent. A non-explicit candidate must first receive a high-confidence sparse semantic judgment; uncertainty does not prompt or block. User confirmation rebuilds the concise North Star and detailed Goal contract together.
 - **Goal-mode contract:** concrete modules, actions, serial/parallel relationships, dependencies, outputs, contribution to the goal, and acceptance. Alignment against this layer answers which concrete module, output, or acceptance condition the work advances. It is not the North Star sentence.
 - **Super-complex plan:** project-relative Markdown/README over 4,000 characters, referenced by a real 2,000-3,500 character Goal-mode contract. The Agent researches existing tools and articles first; if reuse is viable, it visibly asks the user whether to reuse it and whether the project is commercial before finalizing the route.
 
@@ -172,7 +181,7 @@ The convergence controller uses both layers. Explicit North Star anti-goals and 
 - **Custodian:** optional `request --text ...` analysis for meaningful goal/scope changes.
 - **Company roles:** optional independent specialist work. Zero roles is valid; missing optional receipts do not block delivery.
 - **Specialist role library:** an optional pinned Agency Agents catalog lets the main thread search and read complete expert prompts without making those profiles decision authorities or copying them into the user project.
-- **Expert-assisted Goal authoring:** an explicit `goal-brief` call may select one high-confidence industry expert to provide structured domain input. The main thread remains the sole Goal author; weak matches produce no expert injection.
+- **Expert-assisted Goal authoring:** while authoring a new detailed Goal for an identifiable industry, run one local `goal-brief --auto-select` match. A high-confidence result must load and use that expert as structured Goal input. A low-confidence result asks the user once to choose a candidate or skip; a non-domain result stays silent. The main thread remains the sole Goal author.
 - **Auditor:** optional `check`; `close` remains strict only about truthful machine certification.
 - **Janitor:** optional MARK_ONLY artifact review. It cannot move or delete product files.
 - **Bounded tickets:** optional contracts when isolation, machine acceptance, or parallel ownership creates net benefit.
@@ -274,6 +283,17 @@ Disable scheduling while keeping the installed plugin:
 ```bash
 python3 scripts/configure_plugin_auto_update.py --disable
 ```
+
+Maintainers publish every completed local version to the canonical repository,
+both edition-pinned marketplaces, and GitHub Release in one verified step:
+
+```bash
+python3 scripts/publish_verified_release.py
+```
+
+The publisher refuses dirty or unverified source and performs remote read-back
+verification. A local version is not release-complete until this command reports
+`PUBLISHED_AND_VERIFIED`.
 
 The update host is configurable. Re-run setup with
 `--marketplace-url https://new-host/path.git` to migrate devices to a replacement
