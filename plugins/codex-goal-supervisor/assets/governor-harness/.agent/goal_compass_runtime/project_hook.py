@@ -40,11 +40,14 @@ from goal_compass_runtime.observer import (
 from goal_compass_runtime.state_store import exclusive_file_lock, load_json, utc_now_iso, write_json
 from goal_compass_runtime.convergence import (
     apply_observation as apply_convergence_observation,
+    auto_start_segment,
     empty_state as empty_convergence_state,
     external_prerequisite_stop_review,
     record_blocker_scope_review,
     refresh as refresh_convergence_state,
+    due_segment_reminder,
 )
+from goal_compass_runtime.reuse_probe import is_due as reuse_probe_due
 from goal_compass_runtime.llm_judge import invoke as invoke_llm_judge
 from goal_compass_runtime.context_continuity import (
     is_read_event as is_context_read_event,
@@ -81,6 +84,8 @@ OBSERVER_EVENTS = AGENT / "runtime" / "observer_events.jsonl"
 OBSERVER_PENDING = AGENT / "runtime" / "observer_pending"
 CONVERGENCE_STATE = AGENT / "runtime" / "convergence_state.json"
 CONVERGENCE_LOCK = AGENT / "runtime" / "convergence_state.lock"
+REUSE_STATE = AGENT / "runtime" / "reuse_probe.json"
+REUSE_NOTICE = AGENT / "runtime" / "reuse_refresh_notice.json"
 LLM_JUDGE_CACHE = AGENT / "runtime" / "llm_judge_cache.json"
 LLM_JUDGE_SCHEMA = AGENT / "protocols" / "llm_judge.schema.json"
 CONTEXT_STATE = AGENT / "runtime" / "context_continuity.json"
@@ -397,6 +402,58 @@ def output(
     print(json.dumps({"hookSpecificOutput": payload}, ensure_ascii=False))
 
 
+def consume_segment_reminder() -> str | None:
+    """Consume one due segment checkpoint without scanning the project."""
+    observed_at = utc_now_iso()
+    try:
+        with exclusive_file_lock(CONVERGENCE_LOCK, timeout=0.2, stale_seconds=30.0):
+            state = refresh_convergence_state(
+                load_json(CONVERGENCE_STATE, empty_convergence_state()),
+                north_star=load_json(NORTH_STAR, {}),
+                phase=load_json(PROGRAM_PHASE, {}),
+                ticket=load_json(CURRENT, {}),
+                updated_at=observed_at,
+            )
+            state, reminder = due_segment_reminder(state, observed_at=observed_at, consume=True)
+            if not reminder:
+                return None
+            write_json(CONVERGENCE_STATE, state)
+    except (OSError, RuntimeError, json.JSONDecodeError):
+        return None
+    return (
+        f"[Goal segment checkpoint] {reminder.get('node_id')} {reminder.get('name')} is "
+        f"{reminder.get('status')} with deadline {reminder.get('deadline_at')}. "
+        "Finish and validate it, or split/replan with one concrete blocker. Do not silently extend the deadline."
+    )
+
+
+def reuse_refresh_reminder(paths: list[str]) -> str | None:
+    """Emit one project-level 24-hour refresh notice on the next product write."""
+    if not paths:
+        return None
+    north = load_json(NORTH_STAR, {})
+    definition = north.get("goal_definition") if isinstance(north.get("goal_definition"), dict) else {}
+    if not north.get("confirmed") or definition.get("quality") != "STRUCTURED_DETAILED":
+        return None
+    state = load_json(REUSE_STATE, {})
+    discovery = state.get("last_probe") if isinstance(state.get("last_probe"), dict) else {}
+    if not discovery or not reuse_probe_due(discovery):
+        return None
+    fingerprint = str(discovery.get("expires_at") or "missing")
+    notice = load_json(REUSE_NOTICE, {})
+    if notice.get("fingerprint") == fingerprint:
+        return None
+    try:
+        write_json(REUSE_NOTICE, {"fingerprint": fingerprint, "notified_at": utc_now_iso()})
+    except OSError:
+        return None
+    return (
+        "[24-hour reuse refresh] Recheck existing open-source tools and new versions against the confirmed "
+        "North Star, detailed Goal, and remaining actions. Integrate and validate a suitable capability; "
+        "do not stop at research. Finish the current atomic edit first."
+    )
+
+
 def handle_context_event(event: dict[str, Any]) -> str | None:
     phase = event_name(event)
     north = load_json(NORTH_STAR, {})
@@ -571,6 +628,17 @@ def observe(event: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]
                 updated_at=str(row.get("ts") or utc_now_iso()),
             )
             convergence = apply_convergence_observation(convergence, row)
+            product_paths = [
+                path for path in paths
+                if not (path == ".agent" or path.startswith(".agent/") or path == ".codex" or path.startswith(".codex/"))
+            ]
+            if phase == "PreToolUse" and kind == "write" and product_paths:
+                stack = convergence.get("goal_stack") if isinstance(convergence.get("goal_stack"), dict) else {}
+                convergence, _ = auto_start_segment(
+                    convergence,
+                    observed_at=str(row.get("ts") or utc_now_iso()),
+                    hints=[stack.get("l3_current_action"), command_text(event), *product_paths],
+                )
             write_json(CONVERGENCE_STATE, convergence)
     except (OSError, RuntimeError, json.JSONDecodeError):
         pass
@@ -761,6 +829,10 @@ def main() -> int:
     context_message = handle_context_event(event)
     if phase in {"PreCompact", "PostCompact"}:
         return 0
+    if phase in {"SessionStart", "SubagentStart", "UserPromptSubmit"}:
+        segment_context = consume_segment_reminder()
+        if segment_context:
+            context_message = "\n\n".join(value for value in (context_message, segment_context) if value)
     if context_message:
         output(context=context_message, hook_event_name=phase)
     if phase == "Stop":
@@ -814,6 +886,10 @@ def main() -> int:
                 output(context=str(first.get("reason") or "Return to the current Goal checkpoint."), hook_event_name=phase)
             else:
                 output(advisory=str(first.get("reason") or "Review the current operation."))
+        else:
+            reminder = reuse_refresh_reminder(metadata["paths"]) or consume_segment_reminder()
+            if reminder:
+                output(context=reminder, hook_event_name=phase)
     elif phase == "PostToolUse":
         if signals:
             output(context=str(signals[0].get("reason") or "Review the current operation."))

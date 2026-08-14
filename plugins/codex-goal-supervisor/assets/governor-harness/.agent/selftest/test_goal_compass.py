@@ -107,6 +107,8 @@ def main() -> int:
                         "dependencies": [],
                         "execution_mode": "SERIAL",
                         "contribution_to_goal": "Produces the only product artifact required by the bounded selftest goal.",
+                        "timebox_hours": 1,
+                        "reminder_interval_hours": 0,
                     },
                     {
                         "node_id": "N2",
@@ -119,6 +121,8 @@ def main() -> int:
                         "dependencies": ["N1"],
                         "execution_mode": "SERIAL",
                         "contribution_to_goal": "Converts the artifact into machine evidence that the bounded goal is complete.",
+                        "timebox_hours": 1,
+                        "reminder_interval_hours": 0,
                     },
                 ],
                 "completion_conditions": ["The ticket is archived as PASS"],
@@ -143,6 +147,15 @@ def main() -> int:
             "non_goals": ["Full application implementation"],
             "assumptions": ["The local filesystem is writable"],
             "open_questions": [],
+            "planning_research": {
+                "completed": True,
+                "researched_at": "2026-08-14T00:00:00Z",
+                "tool_sources_reviewed": 1,
+                "article_sources_reviewed": 1,
+                "refresh_interval_hours": 24,
+                "reusable_candidate_found": False,
+                "no_suitable_reuse_reason": "The neutral selftest intentionally validates the local runtime without adopting product tooling.",
+            },
         }
         definition_path = repo / "goal-definition.json"
         definition_path.write_text(json.dumps(definition, indent=2) + "\n", encoding="utf-8")

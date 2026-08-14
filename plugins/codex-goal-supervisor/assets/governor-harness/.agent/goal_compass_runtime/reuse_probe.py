@@ -1,7 +1,7 @@
 """Mandatory, cached software-reuse reconnaissance for implementation work.
 
-The probe searches public GitHub repositories before a mutation ticket starts,
-persists candidates, and refreshes them after five days.  It does not clone or
+The probe searches public GitHub repositories when a detailed Goal is authored,
+persists candidates, and refreshes them after 24 hours of continued work. It does not clone or
 execute third-party code.  A strong direct-reuse candidate requires one short
 ticket decision before custom implementation may begin.
 """
@@ -24,8 +24,8 @@ from .state_store import load_json, utc_now_iso, write_json
 
 CONFIG_NAME = "reuse_probe_config.json"
 STATE_NAME = "reuse_probe.json"
-SCHEMA_VERSION = 1
-DEFAULT_TTL_DAYS = 5
+SCHEMA_VERSION = 2
+DEFAULT_REFRESH_HOURS = 24
 DEFAULT_TIMEOUT_SECONDS = 6.0
 MAX_CANDIDATES = 5
 VALID_DECISIONS = {
@@ -61,7 +61,7 @@ def default_config() -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "enabled": True,
         "required_before_mutation": True,
-        "ttl_days": DEFAULT_TTL_DAYS,
+        "refresh_interval_hours": DEFAULT_REFRESH_HOURS,
         "timeout_seconds": DEFAULT_TIMEOUT_SECONDS,
         "max_candidates": MAX_CANDIDATES,
         "github_token_env": "GITHUB_TOKEN",
@@ -79,6 +79,11 @@ def ensure_config(agent_dir: Path = Path(".agent")) -> dict[str, Any]:
         return current
     merged = default_config()
     merged.update(current)
+    # Schema 1 used a five-day ttl. Do not let that stale key silently weaken
+    # the current 24-hour long-task refresh contract.
+    merged.pop("ttl_days", None)
+    merged["schema_version"] = SCHEMA_VERSION
+    merged["refresh_interval_hours"] = DEFAULT_REFRESH_HOURS
     if merged != current:
         write_json(path, merged)
     return merged
@@ -117,9 +122,9 @@ def _now() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
 
-def _expires_at(checked_at: str, ttl_days: int) -> str:
+def _expires_at(checked_at: str, refresh_hours: float) -> str:
     base = _parse_time(checked_at) or _now()
-    return (base + dt.timedelta(days=max(1, ttl_days))).replace(microsecond=0).isoformat()
+    return (base + dt.timedelta(hours=max(1.0, refresh_hours))).replace(microsecond=0).isoformat()
 
 
 def _project_languages() -> list[str]:
@@ -456,6 +461,7 @@ def probe(
             "status": "UNAVAILABLE",
             "checked_at": checked_at,
             "expires_at": _expires_at(checked_at, 1),
+            "refresh_interval_hours": 1,
             "context_fingerprint": fingerprint,
             "query_terms": terms,
             "remaining_actions": list(remaining_actions or [])[:40],
@@ -483,11 +489,12 @@ def probe(
         known_update_names = {str(row.get("name") or "") for row in updates}
         updates.extend(row for row in seen_updates if str(row.get("name") or "") not in known_update_names)
         direct = [row for row in candidates if row.get("reuse_fit") == "DIRECT_REUSE_CANDIDATE"]
-        ttl_days = max(1, int(config.get("ttl_days") or DEFAULT_TTL_DAYS))
+        refresh_hours = max(1.0, float(config.get("refresh_interval_hours") or DEFAULT_REFRESH_HOURS))
         result = {
             "status": "COMPLETE" if candidates else "NO_CANDIDATES",
             "checked_at": checked_at,
-            "expires_at": _expires_at(checked_at, ttl_days),
+            "expires_at": _expires_at(checked_at, refresh_hours),
+            "refresh_interval_hours": refresh_hours,
             "context_fingerprint": fingerprint,
             "query_terms": terms,
             "remaining_actions": list(remaining_actions or [])[:40],
@@ -693,6 +700,7 @@ def compact_status(ticket: dict[str, Any] | None, agent_dir: Path = Path(".agent
         "status": discovery.get("status"),
         "checked_at": discovery.get("checked_at"),
         "refresh_due_at": discovery.get("expires_at"),
+        "refresh_interval_hours": discovery.get("refresh_interval_hours", DEFAULT_REFRESH_HOURS),
         "refresh_due": is_due(discovery) if discovery else True,
         "candidate_count": len(discovery.get("candidates", [])) if isinstance(discovery, dict) else 0,
         "direct_reuse_candidate_count": len(discovery.get("direct_reuse_candidates", [])) if isinstance(discovery, dict) else 0,

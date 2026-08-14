@@ -6,6 +6,7 @@ bounded, cheap to update from hooks, and disposable with the project.
 from __future__ import annotations
 
 import copy
+import datetime as dt
 import hashlib
 import json
 from typing import Any
@@ -19,6 +20,7 @@ MAX_GOAL_MODULES = 16
 MAX_GOAL_LIST_ITEMS = 8
 MAX_GOAL_TEXT = 360
 MAX_GOAL_COVERAGE_LABELS = 8
+MAX_SEGMENT_HISTORY = 64
 COLLABORATION_PROGRESS_TRANSITIONS = {
     "BLOCKED_WITH_EVIDENCE",
     "DELIVERED",
@@ -73,6 +75,11 @@ def empty_state() -> dict[str, Any]:
             "status": "IDLE",
             "required_action": "none",
             "last_round": None,
+        },
+        "segments": {
+            "active": {},
+            "completed": [],
+            "last_reminder": None,
         },
         "recovery": {
             "latest_checkpoint": None,
@@ -129,6 +136,8 @@ def goal_contract_projection(north_star: dict[str, Any]) -> dict[str, Any]:
             "exit_criteria": _bounded_strings(node.get("exit_criteria")),
             "execution_mode": _bounded_text(node.get("execution_mode")),
             "contribution_to_goal": _bounded_text(node.get("contribution_to_goal")),
+            "timebox_hours": node.get("timebox_hours"),
+            "reminder_interval_hours": node.get("reminder_interval_hours", 0),
         })
     deliverables = []
     for value in definition.get("deliverables", [])[:MAX_GOAL_LIST_ITEMS] if isinstance(definition.get("deliverables"), list) else []:
@@ -389,6 +398,229 @@ def refresh(
             row["goal_completion"] = completion
     row["updated_at"] = updated_at
     return row
+
+
+def _parse_time(value: Any) -> dt.datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=dt.timezone.utc)
+
+
+def _iso(value: dt.datetime) -> str:
+    return value.astimezone(dt.timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _segment_module(state: dict[str, Any], node_id: str) -> dict[str, Any] | None:
+    stack = state.get("goal_stack") if isinstance(state.get("goal_stack"), dict) else {}
+    contract = stack.get("goal_contract") if isinstance(stack.get("goal_contract"), dict) else {}
+    for row in contract.get("modules", []) if isinstance(contract.get("modules"), list) else []:
+        if isinstance(row, dict) and str(row.get("node_id") or "").strip() == node_id:
+            return row
+    return None
+
+
+def start_segment(
+    state: dict[str, Any] | None,
+    *,
+    node_id: str,
+    observed_at: str,
+    started_by: str = "EXPLICIT",
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Start one Goal module and derive its real wall-clock deadline."""
+    row = copy.deepcopy(state or empty_state())
+    module = _segment_module(row, str(node_id).strip())
+    if module is None:
+        raise ValueError(f"unknown Goal segment: {node_id}")
+    segments = row.setdefault("segments", copy.deepcopy(empty_state()["segments"]))
+    active = segments.setdefault("active", {})
+    key = str(node_id).strip()
+    if key in active:
+        return row, copy.deepcopy(active[key])
+    completed = {
+        str(item.get("node_id") or "")
+        for item in segments.get("completed", [])
+        if isinstance(item, dict)
+    }
+    missing = [value for value in _strings(module.get("dependencies")) if value not in completed]
+    if missing:
+        raise ValueError("segment dependencies are not complete: " + ", ".join(missing))
+    try:
+        timebox = float(module.get("timebox_hours"))
+    except (TypeError, ValueError):
+        timebox = 0.0
+    if timebox <= 0:
+        raise ValueError(f"Goal segment {key} has no positive timebox_hours")
+    try:
+        cadence = float(module.get("reminder_interval_hours") or 0)
+    except (TypeError, ValueError):
+        cadence = 0.0
+    started = _parse_time(observed_at) or dt.datetime.now(dt.timezone.utc)
+    deadline = started + dt.timedelta(hours=timebox)
+    next_reminder = deadline if timebox <= 2 or cadence <= 0 else min(
+        started + dt.timedelta(hours=cadence), deadline
+    )
+    runtime = {
+        "node_id": key,
+        "name": module.get("name"),
+        "objective": module.get("objective"),
+        "status": "ACTIVE",
+        "started_at": _iso(started),
+        "deadline_at": _iso(deadline),
+        "timebox_hours": timebox,
+        "reminder_interval_hours": cadence,
+        "next_reminder_at": _iso(next_reminder),
+        "reminder_count": 0,
+        "started_by": started_by,
+    }
+    active[key] = runtime
+    row["updated_at"] = _iso(started)
+    return row, copy.deepcopy(runtime)
+
+
+def auto_start_segment(
+    state: dict[str, Any] | None,
+    *,
+    observed_at: str,
+    hints: list[str] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Silently start a segment only when the current implementation target is unambiguous."""
+    row = copy.deepcopy(state or empty_state())
+    segments = row.setdefault("segments", copy.deepcopy(empty_state()["segments"]))
+    active = segments.setdefault("active", {})
+    completed = {
+        str(item.get("node_id") or "")
+        for item in segments.get("completed", [])
+        if isinstance(item, dict)
+    }
+    stack = row.get("goal_stack") if isinstance(row.get("goal_stack"), dict) else {}
+    contract = stack.get("goal_contract") if isinstance(stack.get("goal_contract"), dict) else {}
+    modules = [item for item in contract.get("modules", []) if isinstance(item, dict)]
+    eligible = [
+        item for item in modules
+        if str(item.get("node_id") or "").strip()
+        and str(item.get("node_id") or "").strip() not in active
+        and str(item.get("node_id") or "").strip() not in completed
+        and all(value in completed for value in _strings(item.get("dependencies")))
+    ]
+    if not eligible:
+        return row, None
+
+    hint = " ".join(str(value or "").strip() for value in (hints or []) if str(value or "").strip())
+    normalized_hint = " " + " ".join(hint.casefold().split()) + " "
+    matches: list[dict[str, Any]] = []
+    if normalized_hint.strip():
+        for item in eligible:
+            node_id = " ".join(str(item.get("node_id") or "").casefold().split())
+            name = " ".join(str(item.get("name") or "").casefold().split())
+            node_match = len(node_id) >= 2 and f" {node_id} " in normalized_hint
+            name_match = len(name) >= 4 and name in normalized_hint
+            if node_match or name_match:
+                matches.append(item)
+
+    target = matches[0] if len(matches) == 1 else None
+    if target is None and not active and len(eligible) == 1:
+        target = eligible[0]
+    if target is None:
+        return row, None
+    return start_segment(
+        row,
+        node_id=str(target.get("node_id") or ""),
+        observed_at=observed_at,
+        started_by="BACKGROUND_HIGH_CONFIDENCE",
+    )
+
+
+def complete_segment(
+    state: dict[str, Any] | None,
+    *,
+    node_id: str,
+    observed_at: str,
+    evidence_ids: list[str] | None = None,
+    completed_criteria: list[str] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Complete a segment only with an explicit result or acceptance signal."""
+    row = copy.deepcopy(state or empty_state())
+    segments = row.setdefault("segments", copy.deepcopy(empty_state()["segments"]))
+    active = segments.setdefault("active", {})
+    key = str(node_id).strip()
+    runtime = active.get(key)
+    if not isinstance(runtime, dict):
+        raise ValueError(f"Goal segment is not active: {key}")
+    evidence = _strings(evidence_ids)
+    criteria = _strings(completed_criteria)
+    if not evidence and not criteria:
+        raise ValueError("segment completion requires --evidence-id or --completed-criterion")
+    completed = copy.deepcopy(runtime)
+    completed.update({
+        "status": "COMPLETED",
+        "completed_at": observed_at,
+        "evidence_ids": evidence[:16],
+        "completed_criteria": criteria[:16],
+        "next_reminder_at": None,
+    })
+    active.pop(key, None)
+    history = [item for item in segments.get("completed", []) if isinstance(item, dict)]
+    history.append(completed)
+    segments["completed"] = history[-MAX_SEGMENT_HISTORY:]
+    row["updated_at"] = observed_at
+    return row, copy.deepcopy(completed)
+
+
+def due_segment_reminder(
+    state: dict[str, Any] | None,
+    *,
+    observed_at: str,
+    consume: bool = False,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Return one bounded reminder on the next hook event after it becomes due."""
+    row = copy.deepcopy(state or empty_state())
+    segments = row.setdefault("segments", copy.deepcopy(empty_state()["segments"]))
+    active = segments.setdefault("active", {})
+    current = _parse_time(observed_at) or dt.datetime.now(dt.timezone.utc)
+    due: list[tuple[dt.datetime, str, dict[str, Any]]] = []
+    for key, runtime in active.items():
+        if not isinstance(runtime, dict):
+            continue
+        next_at = _parse_time(runtime.get("next_reminder_at"))
+        if next_at is not None and current >= next_at:
+            due.append((next_at, str(key), runtime))
+    if not due:
+        return row, None
+    _, key, runtime = sorted(due, key=lambda item: item[0])[0]
+    deadline = _parse_time(runtime.get("deadline_at"))
+    overdue = bool(deadline and current >= deadline)
+    reminder = {
+        "node_id": key,
+        "name": runtime.get("name"),
+        "objective": runtime.get("objective"),
+        "status": "OVERDUE" if overdue else "TIMEBOX_CHECKPOINT",
+        "deadline_at": runtime.get("deadline_at"),
+        "timebox_hours": runtime.get("timebox_hours"),
+        "required_action": (
+            "finish_validate_or_split_with_reason"
+            if overdue else "check_progress_and_continue_highest_value_path"
+        ),
+    }
+    if consume:
+        try:
+            cadence = float(runtime.get("reminder_interval_hours") or 0)
+        except (TypeError, ValueError):
+            cadence = 0.0
+        cadence = cadence if cadence > 0 else max(1.0, min(float(runtime.get("timebox_hours") or 1), 4.0))
+        runtime["reminder_count"] = int(runtime.get("reminder_count", 0) or 0) + 1
+        runtime["last_reminded_at"] = _iso(current)
+        next_reminder = current + dt.timedelta(hours=cadence)
+        if not overdue and deadline is not None:
+            next_reminder = min(next_reminder, deadline)
+        runtime["next_reminder_at"] = _iso(next_reminder)
+        segments["last_reminder"] = copy.deepcopy(reminder)
+        row["updated_at"] = _iso(current)
+    return row, reminder
 
 
 def apply_observation(state: dict[str, Any] | None, event: dict[str, Any]) -> dict[str, Any]:
@@ -667,6 +899,11 @@ def compact_status(state: dict[str, Any] | None) -> dict[str, Any]:
         contract_summary["execution_plan_ref"] = contract.get("execution_plan_ref")
     stack["goal_contract"] = contract_summary
     collaboration = row.get("collaboration") if isinstance(row.get("collaboration"), dict) else {}
+    segments = row.get("segments") if isinstance(row.get("segments"), dict) else {}
+    active_segments = [
+        copy.deepcopy(value) for value in (segments.get("active") or {}).values()
+        if isinstance(value, dict)
+    ]
     return {
         "goal_stack": stack,
         "progress": {
@@ -688,6 +925,12 @@ def compact_status(state: dict[str, Any] | None) -> dict[str, Any]:
             "no_evidence_rounds": int(collaboration.get("no_evidence_rounds", 0) or 0),
             "required_action": collaboration.get("required_action", "none"),
             "last_round": collaboration.get("last_round"),
+        },
+        "segments": {
+            "active": active_segments,
+            "active_count": len(active_segments),
+            "completed_count": len(segments.get("completed") or []),
+            "last_reminder": segments.get("last_reminder"),
         },
         "recovery": row.get("recovery", {}),
         "judge": row.get("judge", {}),

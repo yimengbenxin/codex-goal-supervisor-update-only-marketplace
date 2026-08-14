@@ -83,6 +83,7 @@ from goal_compass_runtime.validation_catalog import (
 )
 from goal_compass_runtime.convergence import (
     apply_observation as apply_convergence_observation,
+    auto_start_segment as auto_start_convergence_segment,
     compact_status as compact_convergence_status,
     empty_state as empty_convergence_state,
     judge_trigger as convergence_judge_trigger,
@@ -90,6 +91,9 @@ from goal_compass_runtime.convergence import (
     record_evidence as record_convergence_evidence,
     record_iteration as record_convergence_iteration,
     refresh as refresh_convergence_state,
+    start_segment as start_convergence_segment,
+    complete_segment as complete_convergence_segment,
+    due_segment_reminder as convergence_segment_reminder,
 )
 from goal_compass_runtime.llm_judge import (
     SCHEMA as LLM_JUDGE_SCHEMA,
@@ -1657,6 +1661,12 @@ def render_goal_mode_objective(definition: dict[str, Any]) -> str:
         execution_mode = str(node.get("execution_mode") or "SERIAL").strip().upper()
         parallel_group = str(node.get("parallel_group") or "").strip()
         contribution = str(node.get("contribution_to_goal") or "").strip()
+        timebox_hours = node.get("timebox_hours")
+        reminder_interval_hours = node.get("reminder_interval_hours", 0)
+        try:
+            reminder_enabled = float(reminder_interval_hours or 0) > 0
+        except (TypeError, ValueError):
+            reminder_enabled = False
         lines.append(f"- {node_id} {name}")
         lines.append(f"  板块目标：{objective}")
         lines.append(f"  执行关系：{execution_mode}" + (f"（并行组 {parallel_group}）" if parallel_group else ""))
@@ -1666,6 +1676,15 @@ def render_goal_mode_objective(definition: dict[str, Any]) -> str:
         lines.append("  签收标准：" + ("；".join(exits) if exits else "未定义"))
         lines.append("  依赖：" + ("；".join(dependencies) if dependencies else "无"))
         lines.append(f"  对总目标的助力：{contribution}")
+        lines.append(f"  小时目标：从实际启动起 {timebox_hours} 小时内完成并满足签收标准；启动时生成真实截止时间。")
+        lines.append(
+            "  定时检查："
+            + (
+                f"每 {reminder_interval_hours} 小时检查一次，完成并登记证据后解除。"
+                if reminder_enabled
+                else "两小时内片段不设中途提醒，到截止点仍未完成时再提示。"
+            )
+        )
 
     lines.extend(["", "3. 模块间联调与接口检验"])
     dependency_checks = []
@@ -1714,7 +1733,68 @@ def render_goal_mode_objective(definition: dict[str, Any]) -> str:
     lines.append("- 必须遵守：" + "；".join(constraints))
     lines.append("- 本轮明确不做：" + "；".join(non_goals))
     lines.append("- 当前假设：" + ("；".join(assumptions) if assumptions else "无未声明假设"))
+
+    research = definition.get("planning_research") if isinstance(definition.get("planning_research"), dict) else {}
+    decisions = research.get("reuse_decisions") if isinstance(research.get("reuse_decisions"), list) else []
+    lines.extend(["", "7. 开源复用与不重复造轮子"])
+    if decisions:
+        for row in decisions:
+            if not isinstance(row, dict):
+                continue
+            lines.append(
+                f"- {str(row.get('module') or '').strip()}：{str(row.get('decision') or '').strip().upper()} "
+                f"{str(row.get('candidate') or '').strip()}；接入：{str(row.get('planned_use') or '').strip()}；"
+                f"许可：{str(row.get('license') or '').strip()}；验证：{str(row.get('validation') or '').strip()}。"
+            )
+    else:
+        lines.append("- 本轮未找到可直接复用且满足目标、许可和验收要求的实现；按已记录原因采用最小自建范围。")
+    lines.append("- 连续运行每满 24 小时，必须按北极星、详细 Goal 与剩余动作复查现有工具的新版本和可复用能力；合适能力要进入对应模块并验证，不能只完成调研。")
     return "\n".join(lines).strip()
+
+
+def planning_research_errors(definition: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    research = definition.get("planning_research") if isinstance(definition.get("planning_research"), dict) else {}
+    if research.get("completed") is not True:
+        errors.append("planning_research.completed")
+    if not str(research.get("researched_at") or "").strip():
+        errors.append("planning_research.researched_at")
+    for field in ("tool_sources_reviewed", "article_sources_reviewed"):
+        try:
+            count = int(research.get(field) or 0)
+        except (TypeError, ValueError):
+            count = 0
+        if count < 1:
+            errors.append(f"planning_research.{field}>=1")
+    try:
+        refresh_hours = float(research.get("refresh_interval_hours") or 0)
+    except (TypeError, ValueError):
+        refresh_hours = 0
+    if refresh_hours != 24:
+        errors.append("planning_research.refresh_interval_hours=24")
+    if research.get("reusable_candidate_found") is True:
+        if not str(research.get("reusable_candidate_name") or "").strip():
+            errors.append("planning_research.reusable_candidate_name")
+        consultation = research.get("user_consultation") if isinstance(research.get("user_consultation"), dict) else {}
+        if consultation.get("asked_in_conversation") is not True:
+            errors.append("planning_research.user_consultation.asked_in_conversation")
+        if str(consultation.get("reuse_choice") or "").strip().upper() not in {"USE", "ADAPT", "REJECT"}:
+            errors.append("planning_research.user_consultation.reuse_choice")
+        if str(consultation.get("commercial_use") or "").strip().upper() not in {"COMMERCIAL", "NON_COMMERCIAL"}:
+            errors.append("planning_research.user_consultation.commercial_use")
+        decisions = research.get("reuse_decisions") if isinstance(research.get("reuse_decisions"), list) else []
+        if not decisions:
+            errors.append("planning_research.reuse_decisions")
+        for index, row in enumerate(decisions):
+            required = ("module", "candidate", "planned_use", "reason", "license", "validation")
+            if not isinstance(row, dict) or any(not str(row.get(key) or "").strip() for key in required):
+                errors.append(f"planning_research.reuse_decisions[{index}].module/candidate/planned_use/reason/license/validation")
+                continue
+            if str(row.get("decision") or "").strip().upper() not in {"USE", "ADAPT", "REJECT"}:
+                errors.append(f"planning_research.reuse_decisions[{index}].decision")
+    elif not str(research.get("no_suitable_reuse_reason") or "").strip():
+        errors.append("planning_research.no_suitable_reuse_reason")
+    return errors
 
 
 def complex_goal_plan_errors(definition: dict[str, Any]) -> list[str]:
@@ -1744,34 +1824,6 @@ def complex_goal_plan_errors(definition: dict[str, Any]) -> list[str]:
             if not any(needle in low for needle in needles):
                 errors.append(field)
 
-    research = definition.get("planning_research") if isinstance(definition.get("planning_research"), dict) else {}
-    if research.get("completed") is not True:
-        errors.append("planning_research.completed")
-    if not str(research.get("researched_at") or "").strip():
-        errors.append("planning_research.researched_at")
-    try:
-        tool_source_count = int(research.get("tool_sources_reviewed") or 0)
-    except (TypeError, ValueError):
-        tool_source_count = 0
-    try:
-        article_source_count = int(research.get("article_sources_reviewed") or 0)
-    except (TypeError, ValueError):
-        article_source_count = 0
-    if tool_source_count < 1:
-        errors.append("planning_research.tool_sources_reviewed>=1")
-    if article_source_count < 1:
-        errors.append("planning_research.article_sources_reviewed>=1")
-    if research.get("reusable_candidate_found") is True:
-        if not str(research.get("reusable_candidate_name") or "").strip():
-            errors.append("planning_research.reusable_candidate_name")
-        consultation = research.get("user_consultation") if isinstance(research.get("user_consultation"), dict) else {}
-        if consultation.get("asked_in_conversation") is not True:
-            errors.append("planning_research.user_consultation.asked_in_conversation")
-        reuse_choice = str(consultation.get("reuse_choice") or "").strip().upper()
-        if reuse_choice not in {"USE", "ADAPT", "REJECT"}:
-            errors.append("planning_research.user_consultation.reuse_choice")
-        if str(consultation.get("commercial_use") or "").strip().upper() not in {"COMMERCIAL", "NON_COMMERCIAL"}:
-            errors.append("planning_research.user_consultation.commercial_use")
     return errors
 
 
@@ -1824,6 +1876,18 @@ def detailed_goal_definition_errors(definition: dict[str, Any]) -> list[str]:
                 errors.append(f"process.nodes[{index}].contribution_to_goal")
             if str(node.get("execution_mode") or "").strip().upper() == "PARALLEL" and not str(node.get("parallel_group") or "").strip():
                 errors.append(f"process.nodes[{index}].parallel_group")
+            try:
+                timebox_hours = float(node.get("timebox_hours") or 0)
+            except (TypeError, ValueError):
+                timebox_hours = 0
+            try:
+                reminder_hours = float(node.get("reminder_interval_hours") or 0)
+            except (TypeError, ValueError):
+                reminder_hours = -1
+            if timebox_hours <= 0:
+                errors.append(f"process.nodes[{index}].timebox_hours>0")
+            if reminder_hours < 0 or (timebox_hours > 2 and not (0 < reminder_hours < timebox_hours)):
+                errors.append(f"process.nodes[{index}].reminder_interval_hours")
 
     deliverables = definition.get("deliverables", [])
     if not isinstance(deliverables, list) or not deliverables:
@@ -1864,13 +1928,21 @@ def detailed_goal_definition_errors(definition: dict[str, Any]) -> list[str]:
             "outputs": ["产出", "output"],
             "goal_contribution": ["对总目标", "目标贡献", "contribution"],
             "acceptance": ["验收", "签收", "acceptance"],
+            "reuse": ["开源", "复用", "open-source", "reuse"],
+            "timebox": ["小时目标", "截止时间", "timebox", "deadline"],
+            "reuse_refresh": ["24 小时", "24小时", "24-hour", "24 hour"],
         }
         objective_low = objective.lower()
         for field, needles in summary_requirements.items():
             if not any(needle in objective_low for needle in needles):
                 errors.append(f"goal_mode_summary.{field}")
+        research = definition.get("planning_research") if isinstance(definition.get("planning_research"), dict) else {}
+        candidate_name = str(research.get("reusable_candidate_name") or "").strip()
+        if research.get("reusable_candidate_found") is True and candidate_name and candidate_name.lower() not in objective_low:
+            errors.append("goal_mode_summary.reusable_candidate_name")
         if reference and reference not in objective:
             errors.append("goal_mode_summary.execution_plan_ref")
+    errors.extend(planning_research_errors(definition))
     errors.extend(complex_goal_plan_errors(definition))
     return list(dict.fromkeys(errors))
 
@@ -7253,8 +7325,9 @@ def cmd_goal_set(args: argparse.Namespace) -> int:
             "error": (
                 "Detailed Goal mode requires a 2,000-3,500 character executable contract with first principles, "
                 "module execution relationships, dependencies, goal contributions, outputs, and final acceptance. "
-                "Super-complex work also requires a referenced project plan over 4,000 characters, written after "
-                "market research and any visible reuse/commercial-use consultation."
+                "Every detailed Goal requires completed tool/article research, explicit reuse decisions, a 24-hour "
+                "refresh policy, and hour-level segment targets. Super-complex work also requires a referenced "
+                "project plan over 4,000 characters."
             ),
             "missing_fields": missing_fields,
             "detail_metrics": definition.get("detail_metrics", {}),
@@ -10427,7 +10500,38 @@ def hook_pre(event: dict[str, Any]) -> int:
     if semantic_advisory:
         advisories.append(semantic_advisory)
     if reuse_probe_due(ticket.get("reuse_discovery")) and observer_notice_once("REUSE_REFRESH_DUE"):
-        advisories.append("Reusable-software reconnaissance is missing or older than five days. Refresh it after the current atomic edit; this does not block execution.")
+        advisories.append("Reusable-software reconnaissance is missing or older than 24 hours of continued work. Refresh it against the North Star, detailed Goal, and remaining actions after the current atomic edit; integrate a suitable result instead of stopping at research. This does not block execution.")
+    try:
+        with exclusive_file_lock(CONVERGENCE_STATE_LOCK, timeout=0.2, stale_seconds=30.0):
+            convergence = refresh_convergence_state(
+                load_json(CONVERGENCE_STATE, empty_convergence_state()),
+                north_star=north_star(),
+                phase=program_phase(),
+                ticket=ticket,
+                updated_at=now(),
+            )
+            product_paths = [path for path in paths if not is_generated(path)]
+            auto_started = None
+            if product_paths:
+                stack = convergence.get("goal_stack") if isinstance(convergence.get("goal_stack"), dict) else {}
+                convergence, auto_started = auto_start_convergence_segment(
+                    convergence,
+                    observed_at=now(),
+                    hints=[ticket.get("task_goal"), stack.get("l3_current_action"), *product_paths],
+                )
+            convergence, segment_due = convergence_segment_reminder(
+                convergence, observed_at=now(), consume=True,
+            )
+            if auto_started or segment_due:
+                write_json(CONVERGENCE_STATE, convergence)
+            if segment_due:
+                advisories.append(
+                    f"Goal segment {segment_due.get('node_id')} ({segment_due.get('name')}) reached "
+                    f"{segment_due.get('status')} for deadline {segment_due.get('deadline_at')}. "
+                    "Finish and validate it, or split/replan with a concrete blocker; do not silently extend the deadline."
+                )
+    except (OSError, RuntimeError, json.JSONDecodeError):
+        pass
 
     freeze = acceptance_frozen_violation(ticket)
     if freeze:
@@ -10701,6 +10805,30 @@ def cmd_convergence(args: argparse.Namespace) -> int:
     )
     completion_result = None
     completion_exit_code = 0
+    segment_result = None
+    if args.start_segment and args.complete_segment:
+        print(json.dumps({"ok": False, "error": "start and complete one segment in separate calls"}, ensure_ascii=False))
+        return 2
+    try:
+        if args.start_segment:
+            state, segment_result = start_convergence_segment(
+                state, node_id=args.start_segment, observed_at=now()
+            )
+        elif args.complete_segment:
+            state, segment_result = complete_convergence_segment(
+                state,
+                node_id=args.complete_segment,
+                observed_at=now(),
+                evidence_ids=list(args.evidence_id or []),
+                completed_criteria=list(args.completed_criterion or []),
+            )
+    except ValueError as exc:
+        print(json.dumps({
+            "ok": False,
+            "status": "SEGMENT_CONTRACT_ERROR",
+            "error": str(exc),
+        }, ensure_ascii=False))
+        return 2
     if args.certify_goal:
         north = north_star()
         goal_stack = state.get("goal_stack") if isinstance(state.get("goal_stack"), dict) else {}
@@ -10943,6 +11071,7 @@ def cmd_convergence(args: argparse.Namespace) -> int:
         "judge_trigger": trigger,
         "judge_result": judge_result,
         "goal_completion": completion_result,
+        "segment": segment_result,
         "ordinary_execution_blocked": False,
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2 if args.verbose else None))
@@ -11085,6 +11214,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--update-decision", choices=sorted(REUSE_UPDATE_DECISIONS))
     p.set_defaults(func=cmd_reuse_check)
     p = sub.add_parser("convergence")
+    p.add_argument("--start-segment")
+    p.add_argument("--complete-segment")
     p.add_argument("--certify-goal", action="store_true")
     p.add_argument("--final-validation-id", action="append", default=[])
     p.add_argument("--completion-summary")

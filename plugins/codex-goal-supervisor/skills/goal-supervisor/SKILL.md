@@ -241,7 +241,9 @@ The Goal-mode contract must state:
 5. module inputs, dependencies, outputs, and contribution to the overall goal;
 6. node exit criteria, deliverables, consumers, and machine or human acceptance evidence;
 7. cross-module integration checks;
-8. final end-to-end validation and evidence-backed delivery.
+8. final end-to-end validation and evidence-backed delivery;
+9. one positive `timebox_hours` for every capability segment, plus a thread-selected reminder interval for segments longer than two hours;
+10. the open-source reuse decisions that belong to each module, and the persistent rule to refresh them every 24 hours of continued work.
 
 Runtime alignment uses both artifacts without merging them. The North Star is
 the durable direction check. The Goal-mode contract is the specific module,
@@ -251,14 +253,16 @@ failure to find an obvious positive module match is advisory only; it may be a
 legitimate prerequisite or bounded exploration. Never reduce this comparison
 to keyword overlap against the full Goal prose.
 
-Before authoring or materially rewriting a super-complex project plan:
+Before authoring any detailed Goal-mode contract, or materially rewriting it:
 
 1. Research current tools, open-source projects, product documentation, and relevant technical articles against the North Star and remaining work.
 2. Use the findings to choose the route, but do not paste the research log or candidate list into the final technical plan.
 3. When a reusable candidate is found, ask the user visibly in conversation whether to use/adapt it and whether the project is commercial. Do not infer either answer and do not hide the question in a JSON contract.
-4. Only after the user answers, write the final plan, integrate the accepted tool into the route, generate the compressed Goal-mode contract, and run `goal-set --require-detailed`.
+4. Only after the user answers, write the final plan, integrate the accepted tool into the relevant module, state how that integration will be validated, generate the Goal-mode contract, and run `goal-set --require-detailed`.
 
-Research happens when the detailed plan is first authored or materially rewritten, not on every continuation. The separate project reuse probe may refresh after five continuous days under its existing policy.
+Research happens when the detailed Goal is first authored or materially rewritten, not on every continuation. If the same long task continues, refresh it after each 24-hour window against the North Star, detailed Goal, and remaining actions. Put the resulting reuse route in Goal mode; never paste the raw research log there. A suitable tool must be used or adapted and validated, not merely mentioned.
+
+Every capability segment has an hour-level target in Goal mode. The first real product write silently starts the clock when exactly one dependency-ready segment is eligible, or when the current action names one segment unambiguously. Ambiguous parallel work is never guessed: use `convergence --start-segment <node_id>` when selecting it. The project stores an absolute wall-clock deadline. Segments of two hours or less normally have no pre-deadline reminder. Longer segments use the Goal-authored cadence. The hook emits at most one due checkpoint at that cadence until `convergence --complete-segment <node_id> --evidence-id <id>` (or a completed criterion) records the result. A missed deadline requires finish, validation, or an explicit split/replan; it is not silently extended and it does not create a ticket. Hooks can remind on subsequent Codex activity, but cannot wake a completely idle client process.
 
 Use `goal-set --require-detailed` for this explicit operation. Never put only the North Star sentence, a path-only reference, or a truncated plan into Goal mode. Do not put Goal Supervisor, tickets, monitoring, or subagents into the product goal.
 
