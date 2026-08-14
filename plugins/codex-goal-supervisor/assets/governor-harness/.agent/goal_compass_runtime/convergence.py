@@ -182,7 +182,7 @@ _STOP_STALL_MARKERS = (
     "才能继续", "才可继续", "再告诉我即可继续", "醒来后", "不再空转",
     "pause execution", "pause the project", "waiting for you", "waiting for the user",
     "requires human action", "requires manual action", "blocked until", "cannot continue until",
-    "resume when", "stop here",
+    "before continuing", "resume when", "stop here",
 )
 _EXTERNAL_PREREQUISITE_MARKERS = (
     "wi-fi", "wifi", "真机", "物理设备", "物理打开", "人工", "用户操作", "登录",
@@ -190,10 +190,11 @@ _EXTERNAL_PREREQUISITE_MARKERS = (
     "external device", "physical device", "manual", "human", "log in", "login",
     "credential", "connect the device", "turn on", "click", "signing",
 )
-_CONTINUING_MARKERS = (
-    "无需等待", "不等待", "不会等待", "继续推进", "继续执行", "继续下推", "同时继续",
-    "不再等待", "without waiting", "not waiting", "keep going", "continue execution",
-    "continue with", "continue the remaining",
+_GLOBAL_BLOCKER_PROOF_MARKERS = (
+    "所有剩余路径", "全部剩余路径", "所有未完成路径", "全部未完成路径", "没有独立路径",
+    "无独立路径", "不存在独立路径", "都依赖", "均依赖", "全部依赖",
+    "all remaining paths", "every remaining path", "all unfinished paths",
+    "no independent path", "no executable path remains", "all paths depend",
 )
 
 
@@ -223,29 +224,97 @@ def _goal_coverage(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _segment_ids(state: dict[str, Any], key: str) -> set[str]:
+    segments = state.get("segments") if isinstance(state.get("segments"), dict) else {}
+    if key == "active":
+        values = segments.get("active") if isinstance(segments.get("active"), dict) else {}
+        return {str(value).strip() for value in values if str(value).strip()}
+    values = segments.get("completed") if isinstance(segments.get("completed"), list) else []
+    return {
+        str(value.get("node_id") or "").strip()
+        for value in values
+        if isinstance(value, dict) and str(value.get("node_id") or "").strip()
+    }
+
+
+def _module_matches_message(module: dict[str, Any], lower_message: str) -> bool:
+    for key, minimum in (("node_id", 2), ("name", 4)):
+        value = " ".join(str(module.get(key) or "").casefold().split())
+        if len(value) >= minimum and value in lower_message:
+            return True
+    return False
+
+
+def _independent_goal_paths(state: dict[str, Any], lower_message: str) -> list[dict[str, Any]]:
+    """Return dependency-ready unfinished modules other than the blocked path."""
+    stack = state.get("goal_stack") if isinstance(state.get("goal_stack"), dict) else {}
+    contract = stack.get("goal_contract") if isinstance(stack.get("goal_contract"), dict) else {}
+    modules = [value for value in contract.get("modules", []) if isinstance(value, dict)]
+    completed = _segment_ids(state, "completed")
+    active = _segment_ids(state, "active")
+    candidates: list[dict[str, Any]] = []
+    for module in modules:
+        node_id = str(module.get("node_id") or "").strip()
+        if not node_id or node_id in completed or node_id in active:
+            continue
+        if _module_matches_message(module, lower_message):
+            continue
+        dependencies = _strings(module.get("dependencies"))
+        if not all(value in completed for value in dependencies):
+            continue
+        candidates.append({
+            "node_id": node_id,
+            "name": _bounded_text(module.get("name")),
+            "objective": _bounded_text(module.get("objective")),
+        })
+    return candidates[:3]
+
+
+def _path_summary(paths: list[dict[str, Any]]) -> str:
+    values = []
+    for path in paths:
+        label = " ".join(value for value in (
+            str(path.get("node_id") or "").strip(),
+            str(path.get("name") or "").strip(),
+        ) if value)
+        objective = str(path.get("objective") or "").strip()
+        if objective:
+            label += ": " + objective
+        if label:
+            values.append(label)
+    return "; ".join(values)
+
+
+def _substantive_progress_since(state: dict[str, Any], review: dict[str, Any]) -> dict[str, int]:
+    activity = state.get("activity") if isinstance(state.get("activity"), dict) else {}
+    progress = state.get("progress") if isinstance(state.get("progress"), dict) else {}
+    return {
+        "writes": max(0, int(activity.get("writes", 0) or 0) - int(review.get("baseline_writes", 0) or 0)),
+        "validations": max(0, int(activity.get("validations", 0) or 0) - int(review.get("baseline_validations", 0) or 0)),
+        "evidence": max(0, int(progress.get("evidence_count", 0) or 0) - int(review.get("baseline_evidence", 0) or 0)),
+    }
+
+
 def external_prerequisite_stop_review(
     state: dict[str, Any] | None,
     message: str,
     *,
     stop_hook_active: bool = False,
 ) -> dict[str, Any]:
-    """Require one Goal-wide scope check before a local prerequisite stops work.
+    """Select a dependency-ready Goal path before a local prerequisite stops work.
 
-    The check is deliberately lexical and narrow. It never decides which work
-    is executable and never loops: Codex marks the forced follow-up Stop with
-    ``stop_hook_active``. The follow-up may stop normally after proving that all
-    remaining Goal paths share the same blocker.
+    A productive continuation may renew the lease. A planning-only continuation
+    receives one execution retry and then fails open so the hook cannot create an
+    infinite explanation loop.
     """
     row = state or empty_state()
     lower = str(message or "").strip().lower()
     completion = row.get("goal_completion") if isinstance(row.get("goal_completion"), dict) else {}
     stack = row.get("goal_stack") if isinstance(row.get("goal_stack"), dict) else {}
     if (
-        stop_hook_active
-        or not lower
+        not lower
         or not stack.get("l0_final_goal")
         or completion.get("status") == "CERTIFIED_COMPLETE"
-        or any(marker in lower for marker in _CONTINUING_MARKERS)
         or not any(marker in lower for marker in _STOP_STALL_MARKERS)
         or not any(marker in lower for marker in _EXTERNAL_PREREQUISITE_MARKERS)
     ):
@@ -257,24 +326,73 @@ def external_prerequisite_stop_review(
         for key in ("module_count", "acceptance_count", "success_criteria_count")
     ):
         return {"should_continue": False, "status": "INSUFFICIENT_GOAL_STRUCTURE"}
+    paths = _independent_goal_paths(row, lower)
+    modules_present = int(coverage.get("module_count", 0) or 0) > 0
+    recovery = row.get("recovery") if isinstance(row.get("recovery"), dict) else {}
+    previous = recovery.get("blocker_scope_review") if isinstance(recovery.get("blocker_scope_review"), dict) else {}
+    if stop_hook_active:
+        if not previous:
+            return {"should_continue": False, "status": "NO_ACTIVE_RECOVERY_LEASE"}
+        if not paths and any(marker in lower for marker in _GLOBAL_BLOCKER_PROOF_MARKERS):
+            return {"should_continue": False, "status": "GLOBAL_BLOCKER_REPORTED"}
+        delta = _substantive_progress_since(row, previous)
+        if not any(delta.values()):
+            attempt = int(previous.get("attempt_count", 1) or 1)
+            if attempt >= 2:
+                return {
+                    "should_continue": False,
+                    "status": "NO_PROGRESS_RETRY_EXHAUSTED",
+                    "progress_delta": delta,
+                }
+            paths = [value for value in previous.get("candidate_paths", []) if isinstance(value, dict)]
+            summary = _path_summary(paths)
+            target = summary or "the highest-value dependency-ready Goal module"
+            return {
+                "should_continue": True,
+                "status": "EXECUTION_RETRY_REQUIRED",
+                "attempt_count": attempt + 1,
+                "reason": (
+                    "[Execute the alternate path now] The previous continuation produced no product write, "
+                    "validation result, or new evidence. Do not return another plan or status explanation. "
+                    f"Use tools now on {target}. Stop only after producing evidence, or after proving that every "
+                    "unfinished Goal path depends on the same external prerequisite."
+                ),
+                "coverage": coverage,
+                "candidate_paths": paths,
+                "progress_delta": delta,
+            }
+
+    if modules_present and not paths:
+        return {"should_continue": False, "status": "NO_DEPENDENCY_READY_INDEPENDENT_PATH"}
     labels = ", ".join(coverage["labels"])
     coverage_text = labels or str(stack.get("l0_final_goal") or "confirmed North Star")[:MAX_GOAL_TEXT]
     if coverage.get("projection_truncated"):
         coverage_text += ", plus additional Goal modules"
-    reason = (
-        "[Goal-wide blocker scope check] One external or manual prerequisite was treated as a reason to stop "
-        "the whole project, but the confirmed North Star is not certified complete. Treat that prerequisite "
-        "as DEFERRED_LOCAL until its scope is proven. Re-read the full Goal contract and classify every unfinished "
-        "module or acceptance path as EXECUTABLE, DEPENDENCY_BLOCKED, HUMAN_BLOCKED, or COMPLETE. Continue the "
-        "highest-value executable item without inventing substitute work or pretending the deferred acceptance "
-        "passed. Stop only if every remaining Goal path is transitively blocked; then report one exact human action "
-        "and the evidence that no independent path remains. Goal coverage snapshot: " + coverage_text + "."
-    )
+    if paths:
+        target = _path_summary(paths)
+        reason = (
+            "[Automatic alternate-path continuation] One external or manual prerequisite blocks only a local path; "
+            "the confirmed North Star is unfinished and a dependency-ready path remains. Mark the local prerequisite "
+            "DEFERRED_LOCAL and use tools now on: " + target + ". Do not merely describe the plan, invent substitute "
+            "work, or claim the deferred acceptance passed. Stop only after producing evidence, or after proving every "
+            "unfinished Goal path depends on the same prerequisite."
+        )
+        status = "CONTINUE_INDEPENDENT_PATH"
+    else:
+        reason = (
+            "[Goal-wide blocker scope check] One external or manual prerequisite was treated as a reason to stop "
+            "the whole project, but the confirmed North Star is not certified complete. Treat it as DEFERRED_LOCAL, "
+            "classify every unfinished acceptance path, and immediately execute any independent path. Stop only if "
+            "all remaining paths share the blocker. Goal coverage snapshot: " + coverage_text + "."
+        )
+        status = "REQUIRES_SCOPE_CHECK"
     return {
         "should_continue": True,
-        "status": "REQUIRES_SCOPE_CHECK",
+        "status": status,
+        "attempt_count": 1,
         "reason": reason,
         "coverage": coverage,
+        "candidate_paths": paths,
     }
 
 
@@ -289,15 +407,30 @@ def record_blocker_scope_review(
     recovery = row.setdefault("recovery", {})
     coverage = review.get("coverage") if isinstance(review.get("coverage"), dict) else {}
     recovery["blocked_reason"] = None
+    activity = row.get("activity") if isinstance(row.get("activity"), dict) else {}
+    progress = row.get("progress") if isinstance(row.get("progress"), dict) else {}
     recovery["blocker_scope_review"] = {
-        "status": "REQUIRES_SCOPE_CHECK",
+        "status": str(review.get("status") or "REQUIRES_SCOPE_CHECK"),
         "kind": "EXTERNAL_OR_MANUAL_PREREQUISITE",
         "observed_at": observed_at,
+        "attempt_count": int(review.get("attempt_count", 1) or 1),
         "goal_module_count": int(coverage.get("module_count", 0) or 0),
         "goal_acceptance_count": int(coverage.get("acceptance_count", 0) or 0),
         "goal_success_criteria_count": int(coverage.get("success_criteria_count", 0) or 0),
+        "candidate_paths": [
+            {
+                "node_id": str(value.get("node_id") or "")[:64],
+                "name": _bounded_text(value.get("name")),
+                "objective": _bounded_text(value.get("objective")),
+            }
+            for value in review.get("candidate_paths", [])[:3]
+            if isinstance(value, dict)
+        ],
+        "baseline_writes": int(activity.get("writes", 0) or 0),
+        "baseline_validations": int(activity.get("validations", 0) or 0),
+        "baseline_evidence": int(progress.get("evidence_count", 0) or 0),
     }
-    recovery["recommended_action"] = "continue_highest_value_unblocked_goal_work_or_prove_global_blocker"
+    recovery["recommended_action"] = "execute_dependency_ready_goal_path_or_prove_global_blocker"
     row["updated_at"] = observed_at
     return row
 

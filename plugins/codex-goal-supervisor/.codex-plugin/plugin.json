@@ -1,6 +1,6 @@
 {
   "name": "codex-goal-supervisor",
-  "version": "2.6.0+codex.20260814171425",
+  "version": "2.6.1+codex.20260815030056",
   "description": "Execution convergence for long Codex loops: preserve goals, prove progress, recover, and finish with evidence",
   "author": {
     "name": "Codex Goal Supervisor contributors"

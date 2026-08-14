@@ -165,7 +165,7 @@ North Star setup is not part of the silent observer. When the user explicitly ac
 | Destructive `git reset`/`git clean` | Block |
 | Direct control-state edit | Block |
 | Exact active-ticket forbidden or immutable path | Block |
-| A local manual/device prerequisite is used to stop an unfinished confirmed Goal | Force one Goal-wide blocker-scope check; continue independent work or prove every remaining path is blocked |
+| A local manual/device prerequisite is used to stop an unfinished confirmed Goal | Select a dependency-ready Goal module and continue it before Stop; one planning-only retry is allowed, while a proven global blocker may stop normally |
 | Hook/runtime failure | Fail open; report once |
 
 Warnings do not require a ticket and do not stop execution. Generic semantic guesses never become hidden denials. The LLM Judge is invoked only for a pending targeted rail, an explicit high-cost ambiguous action, an appeal with new evidence, or two completed iterations without evidence progress. Results are structured and cached; missing, malformed, or timed-out judgment fails open.

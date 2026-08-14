@@ -351,7 +351,7 @@ def stop_completion_context(event: dict[str, Any]) -> str | None:
 
 
 def stop_stall_recovery(event: dict[str, Any]) -> str | None:
-    """Force one bounded Goal-wide review before an external prerequisite stops work."""
+    """Continue a dependency-ready Goal path before a local prerequisite stops work."""
     north = load_json(NORTH_STAR, {})
     if not north.get("confirmed"):
         return None

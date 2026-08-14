@@ -55,11 +55,12 @@ Ambiguous semantic judgments are warnings, never hidden approvals or denials. On
 For a confirmed Goal, `UserPromptSubmit` also creates a bounded Goal-return branch unless the user explicitly replaces the Goal, promotes a persistent constraint, or simply asks to continue. `Stop` closes a completed branch. After compaction, `SessionStart` restores the current Goal checkpoint and treats closed branches as tombstoned history. A first exact-path replay is silent context, a second is a warning, and a third may reach the sparse Judge. Do not expose this bookkeeping as a ticket or ask the user to manage it.
 
 If a response tries to stop an unfinished confirmed Goal only because of one
-manual, physical-device, login, or other external prerequisite, `Stop` forces
-one bounded Goal-wide scope check. Defer the local prerequisite, inspect every
-unfinished Goal module or acceptance path, and continue the highest-value
-independent work. If all remaining paths are transitively blocked, report one
-exact human action and stop normally; `stop_hook_active` prevents a loop.
+manual, physical-device, login, or other external prerequisite, `Stop` selects
+a dependency-ready unfinished Goal module and continues it before the turn can
+stop. The continuation must use tools and produce a product write, validation,
+or evidence; a planning-only response receives one bounded execution retry.
+Productive work renews the alternate-path check. If all remaining paths are
+transitively blocked, report one exact human action and stop normally.
 
 ### 2. Explicit Optional Capabilities
 
