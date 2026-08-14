@@ -52,6 +52,7 @@ Its supreme rule is:
 | --- | --- | --- |
 | The project gradually forgets why it exists | Preserve a concise, project-owned North Star | Durable direction across long execution |
 | A large objective is too vague to execute | Maintain a separate detailed Goal-mode contract with modules, dependencies, outputs, and acceptance | Concrete work without confusing the North Star with the plan |
+| Users cannot see where a long task currently is | Project the detailed Goal contract and convergence state into a live local route map | Visible current node, dependencies, actions, inputs, outputs, consumers, and impact without a second plan |
 | The Agent builds before checking what can be reused | Probe existing tools and project history at plan inception or a material route change, then record an explicit reuse or rejection decision | Less reinvention without forcing research on every turn |
 | A temporary user request captures the loop | Track it as a bounded branch and restore the active Goal after completion or compaction | Temporary work ends instead of replaying for hours |
 | Activity is mistaken for progress | Track evidence-backed success criteria and convergence state separately from command/file counts | Progress means closer to acceptance, not merely busier |
@@ -184,6 +185,7 @@ The convergence controller uses both layers. Explicit North Star anti-goals and 
 - **Company roles:** optional independent specialist work. Zero roles is valid; missing optional receipts do not block delivery.
 - **Specialist role library:** an optional pinned Agency Agents catalog lets the main thread search and read complete expert prompts without making those profiles decision authorities or copying them into the user project.
 - **Expert-assisted Goal authoring:** while authoring a new detailed Goal for an identifiable industry, run one local `goal-brief --auto-select` match. A high-confidence result must load and use that expert as structured Goal input. A low-confidence result asks the user once to choose a candidate or skip; a non-domain result stays silent. The main thread remains the sole Goal author.
+- **Live technical route:** every newly authored or materially rewritten detailed Goal contains a complete high-level node route before implementation. `goal-set --require-detailed` starts a loopback read-only dashboard and returns its URL. The Codex in-app browser opens that URL when available; node detail expansion remains optional.
 - **Auditor:** optional `check`; `close` remains strict only about truthful machine certification.
 - **Janitor:** optional MARK_ONLY artifact review. It cannot move or delete product files.
 - **Bounded tickets:** optional contracts when isolation, machine acceptance, or parallel ownership creates net benefit.
@@ -348,6 +350,7 @@ Exact North Star deviation incidents use a separate persistent counter. The same
 
 - `status` returns current truth, one reason, one next action, compact observer state, and the active ticket summary. Use `status --verbose` for company, MDCP, feedback, reuse, hook, and checkpoint details.
 - `convergence` returns the L0-L3 goal stack, evidence progress, activity counters, iteration state, and recovery checkpoint. `convergence --record-iteration ...` records a high-cost experiment; `convergence --judge ...` explicitly asks the sparse Judge.
+- `roadmap` starts or recovers the local route dashboard. `roadmap --snapshot` returns its bounded projection and `roadmap --stop` stops the service. The page reads `.agent/north_star_goal.json` and `.agent/runtime/convergence_state.json`, binds only to `127.0.0.1`, and never becomes authoritative state.
 - `onboard-scan` still writes the full JSON/Markdown reports, but stdout contains only alignment, evidence counts, classification counts, and report paths. Use `onboard-scan --verbose` to print the inventory.
 - An unconfirmed North Star is `NEEDS_CONFIRMATION`, not a command failure. Destructive cleanup remains unavailable until confirmation.
 

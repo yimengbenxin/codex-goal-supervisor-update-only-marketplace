@@ -119,20 +119,59 @@ def _bounded_strings(values: Any) -> list[str]:
     return [value[:MAX_GOAL_TEXT] for value in _strings(values)[:MAX_GOAL_LIST_ITEMS]]
 
 
+def _bounded_actions(values: Any) -> list[dict[str, Any]]:
+    actions = []
+    for index, value in enumerate(values[:MAX_GOAL_LIST_ITEMS] if isinstance(values, list) else []):
+        if isinstance(value, dict):
+            name = _bounded_text(value.get("name") or value.get("action") or value.get("description"))
+            if not name:
+                continue
+            actions.append({
+                "action_id": _bounded_text(value.get("action_id")) or f"A{index + 1}",
+                "name": name,
+                "from": _bounded_text(value.get("from")),
+                "to": _bounded_text(value.get("to")),
+                "inputs": _bounded_strings(value.get("inputs")),
+                "outputs": _bounded_strings(value.get("outputs")),
+                "consumer": _bounded_text(value.get("consumer")),
+            })
+            continue
+        name = _bounded_text(value)
+        if name:
+            actions.append({"action_id": f"A{index + 1}", "name": name})
+    return actions
+
+
 def goal_contract_projection(north_star: dict[str, Any]) -> dict[str, Any]:
     """Project the detailed Goal contract without copying the long Goal prose."""
     definition = north_star.get("goal_definition") if isinstance(north_star.get("goal_definition"), dict) else {}
     process = definition.get("process") if isinstance(definition.get("process"), dict) else {}
     nodes = [row for row in process.get("nodes", []) if isinstance(row, dict)]
+    node_ids = [str(node.get("node_id") or f"N{index + 1}").strip() for index, node in enumerate(nodes)]
+    dependent_consumers: dict[str, list[str]] = {node_id: [] for node_id in node_ids}
+    for index, node in enumerate(nodes):
+        consumer_id = node_ids[index]
+        for dependency in _bounded_strings(node.get("dependencies")):
+            if dependency in dependent_consumers and consumer_id not in dependent_consumers[dependency]:
+                dependent_consumers[dependency].append(consumer_id)
     modules = []
     for index, node in enumerate(nodes[:MAX_GOAL_MODULES]):
+        node_id = _bounded_text(node.get("node_id")) or f"N{index + 1}"
+        consumers = list(dict.fromkeys([
+            *_bounded_strings(node.get("consumers")),
+            *dependent_consumers.get(node_id, []),
+        ]))
         modules.append({
-            "node_id": _bounded_text(node.get("node_id")) or f"N{index + 1}",
+            "node_id": node_id,
             "name": _bounded_text(node.get("name")),
             "objective": _bounded_text(node.get("objective")),
             "dependencies": _bounded_strings(node.get("dependencies")),
             "inputs": _bounded_strings(node.get("inputs")),
+            "actions": _bounded_actions(node.get("actions")),
             "outputs": _bounded_strings(node.get("outputs")),
+            "consumers": consumers,
+            "affected_paths": _bounded_strings(node.get("affected_paths")),
+            "affected_modules": _bounded_strings(node.get("affected_modules")),
             "exit_criteria": _bounded_strings(node.get("exit_criteria")),
             "execution_mode": _bounded_text(node.get("execution_mode")),
             "contribution_to_goal": _bounded_text(node.get("contribution_to_goal")),

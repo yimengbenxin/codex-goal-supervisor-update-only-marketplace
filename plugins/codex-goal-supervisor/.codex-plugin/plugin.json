@@ -1,6 +1,6 @@
 {
   "name": "codex-goal-supervisor",
-  "version": "2.6.1+codex.20260815030056",
+  "version": "2.7.0+codex.20260815043629",
   "description": "Execution convergence for long Codex loops: preserve goals, prove progress, recover, and finish with evidence",
   "author": {
     "name": "Codex Goal Supervisor contributors"
@@ -28,6 +28,7 @@
       "User-confirmed durable North Star evolution",
       "Goal-authored open-source reuse decisions with 24-hour long-task refresh",
       "Hour-level capability segments with real wall-clock deadlines",
+      "Live project-local technical route with current-node visualization",
       "Evidence-bearing cross-thread collaboration liveness",
       "Versioned Git marketplace auto-update for new Codex sessions"
     ],

@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Goal Roadmap</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17212b;
+      --muted: #627180;
+      --line: #d9e0e6;
+      --surface: #ffffff;
+      --canvas: #f3f6f8;
+      --active: #1769aa;
+      --ready: #087f5b;
+      --done: #486a50;
+      --blocked: #8a5b17;
+      --danger: #a33b32;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+      overflow: hidden;
+    }
+    button { font: inherit; }
+    .shell { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      padding: 14px 18px 12px;
+    }
+    .topline { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+    h1 { margin: 0; font-size: 19px; line-height: 1.25; font-weight: 700; }
+    .goal { margin-top: 5px; max-width: 960px; color: var(--muted); }
+    .tools { display: flex; gap: 6px; flex: 0 0 auto; }
+    .icon-button {
+      width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 6px;
+      background: var(--surface); color: var(--ink); cursor: pointer; font-weight: 700;
+    }
+    .icon-button:hover { border-color: #91a2b1; background: #f7f9fa; }
+    .summary { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; color: var(--muted); }
+    .summary strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+    .current { color: var(--active); }
+    main { display: grid; grid-template-columns: minmax(0, 1fr) 0; min-height: 0; }
+    main.detail-open { grid-template-columns: minmax(0, 1fr) minmax(320px, 390px); }
+    .viewport { position: relative; overflow: auto; min-width: 0; padding: 26px; }
+    #graph {
+      position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 270px;
+      align-items: start; gap: 70px; min-width: max-content; min-height: calc(100vh - 170px);
+      transform-origin: 0 0;
+    }
+    .column { display: grid; gap: 14px; align-content: start; position: relative; z-index: 2; }
+    .column-label { color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .node {
+      width: 270px; min-height: 142px; text-align: left; padding: 14px;
+      border: 1px solid var(--line); border-left-width: 4px; border-radius: 7px;
+      background: var(--surface); color: var(--ink); cursor: pointer;
+      box-shadow: 0 2px 5px rgba(28, 43, 56, .06);
+    }
+    .node:hover, .node[aria-selected="true"] { border-color: #91a2b1; box-shadow: 0 5px 16px rgba(28, 43, 56, .12); }
+    .node[data-status="ACTIVE"] { border-left-color: var(--active); background: #f4f9fd; }
+    .node[data-status="READY"] { border-left-color: var(--ready); }
+    .node[data-status="COMPLETED"] { border-left-color: var(--done); background: #f5f8f5; }
+    .node[data-status="BLOCKED"] { border-left-color: var(--blocked); background: #fffaf1; }
+    .node-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .node-id { font-size: 12px; color: var(--muted); font-weight: 700; }
+    .badge { font-size: 11px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+    .node[data-status="ACTIVE"] .badge { color: var(--active); }
+    .node[data-status="READY"] .badge { color: var(--ready); }
+    .node[data-status="BLOCKED"] .badge { color: var(--blocked); }
+    .node-name { margin-top: 7px; font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+    .node-objective { margin-top: 7px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .node-foot { margin-top: 10px; display: flex; gap: 10px; color: var(--muted); font-size: 12px; }
+    #edges { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 1; }
+    #edges path { fill: none; stroke: #9aa9b6; stroke-width: 1.5; }
+    #edges marker path { fill: #9aa9b6; stroke: none; }
+    aside {
+      overflow: auto; background: var(--surface); border-left: 1px solid var(--line);
+      padding: 0; transform: translateX(100%); transition: transform 140ms ease;
+    }
+    main.detail-open aside { transform: translateX(0); }
+    .detail-head { position: sticky; top: 0; background: var(--surface); border-bottom: 1px solid var(--line); padding: 15px 17px; z-index: 3; }
+    .detail-title { margin: 5px 36px 0 0; font-size: 18px; font-weight: 700; overflow-wrap: anywhere; }
+    .close { position: absolute; right: 12px; top: 12px; }
+    .detail-body { padding: 16px 17px 28px; }
+    .detail-section { padding: 13px 0; border-bottom: 1px solid #e9edf0; }
+    .detail-section:last-child { border-bottom: 0; }
+    .detail-section h2 { margin: 0 0 8px; font-size: 12px; color: var(--muted); text-transform: uppercase; }
+    .detail-section p { margin: 0; overflow-wrap: anywhere; }
+    .list { margin: 0; padding-left: 18px; }
+    .list li { margin: 5px 0; overflow-wrap: anywhere; }
+    .flow-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; margin: 7px 0; }
+    .flow-box { padding: 8px; border: 1px solid var(--line); border-radius: 5px; background: #f8fafb; overflow-wrap: anywhere; }
+    .arrow { color: var(--muted); font-weight: 700; }
+    .empty { color: var(--muted); font-style: italic; }
+    .error { margin: 30px; padding: 18px; border-left: 4px solid var(--danger); background: var(--surface); }
+    @media (max-width: 780px) {
+      main.detail-open { grid-template-columns: 1fr; }
+      aside { position: fixed; inset: 112px 0 0 12%; z-index: 10; box-shadow: -8px 0 24px rgba(28,43,56,.16); }
+      .summary { gap: 8px 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="topline">
+        <div>
+          <h1>Goal 技术路线</h1>
+          <div class="goal" id="goal">正在读取项目目标…</div>
+        </div>
+        <div class="tools" aria-label="视图缩放">
+          <button class="icon-button" id="zoom-out" title="缩小" aria-label="缩小">−</button>
+          <button class="icon-button" id="zoom-reset" title="恢复原始大小" aria-label="恢复原始大小">1:1</button>
+          <button class="icon-button" id="zoom-in" title="放大" aria-label="放大">+</button>
+        </div>
+      </div>
+      <div class="summary" id="summary"></div>
+    </header>
+    <main id="layout">
+      <section class="viewport" aria-label="技术路线图">
+        <svg id="edges" aria-hidden="true"></svg>
+        <div id="graph"></div>
+      </section>
+      <aside id="detail" aria-label="节点详情">
+        <div class="detail-head">
+          <div class="node-id" id="detail-id"></div>
+          <div class="detail-title" id="detail-title"></div>
+          <button class="icon-button close" id="close-detail" title="关闭详情" aria-label="关闭详情">×</button>
+        </div>
+        <div class="detail-body" id="detail-body"></div>
+      </aside>
+    </main>
+  </div>
+  <script>
+    const state = { data: null, selected: null, scale: 1 };
+    const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    const list = (title, values) => `<section class="detail-section"><h2>${esc(title)}</h2>${values?.length ? `<ul class="list">${values.map(v => `<li>${esc(v)}</li>`).join("")}</ul>` : `<div class="empty">未展开</div>`}</section>`;
+    const statusName = value => ({ACTIVE:"进行中", READY:"可执行", COMPLETED:"已完成", BLOCKED:"等待依赖"}[value] || value);
+
+    function levels(nodes) {
+      const map = new Map(nodes.map(n => [n.node_id, n]));
+      const memo = new Map();
+      function depth(id, seen = new Set()) {
+        if (memo.has(id)) return memo.get(id);
+        if (seen.has(id)) return 0;
+        seen.add(id);
+        const node = map.get(id);
+        const deps = (node?.dependencies || []).filter(dep => map.has(dep));
+        const value = deps.length ? Math.max(...deps.map(dep => depth(dep, new Set(seen)))) + 1 : 0;
+        memo.set(id, value);
+        return value;
+      }
+      const columns = [];
+      nodes.forEach(node => { const d = depth(node.node_id); (columns[d] ||= []).push(node); });
+      return columns;
+    }
+
+    function renderGraph() {
+      const data = state.data;
+      document.getElementById("goal").textContent = data.goal.precise_goal || data.goal.north_star || "尚未建立详细 Goal";
+      const p = data.progress;
+      const current = data.current_node_ids.length ? data.current_node_ids.join(", ") : "尚未启动节点";
+      document.getElementById("summary").innerHTML = `
+        <span>节点 <strong>${p.total}</strong></span><span>完成 <strong>${p.completed}</strong></span>
+        <span>进行 <strong>${p.active}</strong></span><span>可执行 <strong>${p.ready}</strong></span>
+        <span class="current">当前 <strong>${esc(current)}</strong></span><span>最终验收 <strong>${esc(p.goal_completion)}</strong></span>`;
+      const graph = document.getElementById("graph");
+      const columns = levels(data.nodes);
+      graph.innerHTML = columns.map((column, index) => `<div class="column"><div class="column-label">阶段 ${index + 1}</div>${column.map(node => `
+        <button class="node" data-node-id="${esc(node.node_id)}" data-status="${esc(node.status)}" aria-selected="${state.selected === node.node_id}">
+          <div class="node-head"><span class="node-id">${esc(node.node_id)}</span><span class="badge">${esc(statusName(node.status))}</span></div>
+          <div class="node-name">${esc(node.name)}</div><div class="node-objective">${esc(node.objective || "")}</div>
+          <div class="node-foot"><span>${node.actions.length} 个动作</span><span>${node.outputs.length} 项产出</span><span>${esc(node.timebox_hours ?? "-")}h</span></div>
+        </button>`).join("")}</div>`).join("");
+      graph.querySelectorAll(".node").forEach(button => button.addEventListener("click", () => openDetail(button.dataset.nodeId)));
+      graph.style.zoom = state.scale;
+      requestAnimationFrame(drawEdges);
+    }
+
+    function drawEdges() {
+      const svg = document.getElementById("edges");
+      const viewport = document.querySelector(".viewport");
+      const box = viewport.getBoundingClientRect();
+      svg.setAttribute("width", viewport.scrollWidth); svg.setAttribute("height", viewport.scrollHeight);
+      svg.innerHTML = `<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs>`;
+      for (const edge of state.data.edges) {
+        const from = document.querySelector(`[data-node-id="${CSS.escape(edge.from)}"]`);
+        const to = document.querySelector(`[data-node-id="${CSS.escape(edge.to)}"]`);
+        if (!from || !to) continue;
+        const a = from.getBoundingClientRect(), b = to.getBoundingClientRect();
+        const x1 = a.right - box.left + viewport.scrollLeft, y1 = a.top + a.height / 2 - box.top + viewport.scrollTop;
+        const x2 = b.left - box.left + viewport.scrollLeft, y2 = b.top + b.height / 2 - box.top + viewport.scrollTop;
+        const bend = Math.max(24, (x2 - x1) / 2);
+        svg.insertAdjacentHTML("beforeend", `<path d="M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}" marker-end="url(#arrow)"></path>`);
+      }
+    }
+
+    function openDetail(id) {
+      const node = state.data.nodes.find(item => item.node_id === id); if (!node) return;
+      state.selected = id; document.getElementById("layout").classList.add("detail-open");
+      document.getElementById("detail-id").textContent = `${node.node_id} · ${statusName(node.status)}`;
+      document.getElementById("detail-title").textContent = node.name;
+      const actionHtml = node.actions.length ? node.actions.map(action => `<div class="flow-row"><div class="flow-box">${esc(action.inputs?.join(" / ") || action.from || "输入")}</div><div class="arrow">→ ${esc(action.name)} →</div><div class="flow-box">${esc(action.outputs?.join(" / ") || action.to || action.consumer || "输出")}</div></div>`).join("") : `<div class="empty">未展开</div>`;
+      const subnodeHtml = node.subnodes.length ? node.subnodes.map(sub => `<li><strong>${esc(sub.node_id)} ${esc(sub.name || "")}</strong><br>${esc(sub.objective || "")}</li>`).join("") : "";
+      document.getElementById("detail-body").innerHTML = `
+        <section class="detail-section"><h2>目标与影响</h2><p>${esc(node.objective || "")}</p><p style="margin-top:8px;color:var(--muted)">${esc(node.contribution_to_goal || "")}</p></section>
+        ${list("依赖", node.dependencies)}${list("输入", node.inputs)}
+        <section class="detail-section"><h2>动作与流向</h2>${actionHtml}</section>
+        ${list("输出", node.outputs)}${list("消费者", node.consumers)}${list("影响路径", [...node.affected_modules, ...node.affected_paths])}
+        ${list("退出与签收标准", node.exit_criteria)}
+        <section class="detail-section"><h2>细分节点</h2>${subnodeHtml ? `<ul class="list">${subnodeHtml}</ul>` : `<div class="empty">未展开。仅在用户需要时细化。</div>`}</section>
+        <section class="detail-section"><h2>时间状态</h2><p>目标 ${esc(node.timebox_hours ?? "-")} 小时 · 截止 ${esc(node.runtime.deadline_at || "尚未启动")}</p></section>`;
+      renderGraph();
+    }
+
+    function closeDetail() { state.selected = null; document.getElementById("layout").classList.remove("detail-open"); renderGraph(); }
+    function setZoom(value) { state.scale = Math.min(1.5, Math.max(.65, value)); document.getElementById("graph").style.zoom = state.scale; requestAnimationFrame(drawEdges); }
+    async function refresh() {
+      try {
+        const response = await fetch("/api/roadmap", {cache:"no-store"}); if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const next = await response.json(); state.data = next; renderGraph(); if (state.selected) openDetail(state.selected);
+      } catch (error) {
+        document.getElementById("graph").innerHTML = `<div class="error">路线图暂时不可用：${esc(error.message)}</div>`;
+      }
+    }
+    document.getElementById("close-detail").addEventListener("click", closeDetail);
+    document.getElementById("zoom-in").addEventListener("click", () => setZoom(state.scale + .1));
+    document.getElementById("zoom-out").addEventListener("click", () => setZoom(state.scale - .1));
+    document.getElementById("zoom-reset").addEventListener("click", () => setZoom(1));
+    window.addEventListener("resize", () => requestAnimationFrame(drawEdges));
+    refresh(); setInterval(refresh, 2000);
+  </script>
+</body>
+</html>

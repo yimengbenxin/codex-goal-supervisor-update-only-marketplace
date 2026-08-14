@@ -230,6 +230,8 @@ def resolve_harness_root() -> Path:
         required = (
             path / ".agent" / "goal_compass.py",
             path / ".agent" / "goal_compass_runtime" / "project_hook.py",
+            path / ".agent" / "goal_compass_runtime" / "roadmap.py",
+            path / ".agent" / "goal_compass_runtime" / "roadmap.html",
             path / ".agent" / "selftest" / "test_goal_compass.py",
             path / ".codex" / "hooks.json",
         )

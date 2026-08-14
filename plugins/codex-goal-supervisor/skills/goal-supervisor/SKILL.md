@@ -24,6 +24,8 @@ still owns the work and final judgment.
 - A confirmed `.agent/north_star_goal.json` is project-owned. Do not rewrite it unless the user explicitly asks.
 - If `.agent/north_star_goal.json` already contains a confirmed goal, reuse it exactly. Do not call `goal-set` unless the user explicitly asks to replace or create that project goal.
 - If a confirmed North Star already exists, preserve it exactly and reuse its stored Goal-mode contract. If no confirmed North Star exists, build the detailed contract, run `goal-set --require-detailed`, and then start Goal mode. Never claim activation is complete when only one of these two states exists.
+- Every newly authored or materially rewritten detailed Goal must contain its complete high-level technical route before implementation: nodes, dependencies, execution relationships, actions, inputs, outputs, consumers, contribution to the Goal, timeboxes, exit criteria, and final acceptance. This is the Goal contract itself, not a second planning artifact. Ordinary one-off work outside an explicitly activated detailed Goal does not acquire this requirement.
+- A successful `goal-set --require-detailed` starts or reuses the loopback roadmap dashboard and returns `roadmap.url`. When continuing an already confirmed detailed Goal in a new task, run `roadmap` once to recover that URL. When the Codex in-app Browser capability is available, open the URL once so the user can watch the current route node; the page refreshes itself. A dashboard startup failure must be reported compactly but cannot block valid product work because North Star and convergence JSON remain authoritative.
 - During a long-running confirmed Goal, do not let the North Star become stale when the user clearly introduces a different durable product direction. A temporary request, question, implementation detail, sequencing change, or subgoal already contained by the current North Star stays silent. For a non-explicit direction change, ask only after the sparse Judge confirms at high confidence that it is durable and outside both the North Star and detailed Goal. Ask once per Goal generation across session changes or compaction, never auto-rewrite, and keep execution available. If the user confirms, rebuild the concise North Star and detailed Goal-mode contract together with `goal-set --replace-existing --require-detailed`; never replace only the one-line North Star.
 - Plugin auto-update is a separate device-level capability. It must never activate a project, alter a North Star, or run from project hooks. When the user explicitly asks to enable or repair automatic updates, run `scripts/configure_plugin_auto_update.py`; otherwise leave device scheduling unchanged.
 - A maintainer-created local version is not complete until `scripts/publish_verified_release.py` reports `PUBLISHED_AND_VERIFIED`. The command must run only after the release commit is clean; it verifies source and extracted ZIPs, publishes the canonical repository plus the full and update-only marketplaces, uploads all three edition ZIPs and their SHA-256 manifest, and reads the remote channels back. Never stream uncommitted file saves to clients.
@@ -73,6 +75,21 @@ After the mandatory North Star and Goal-mode setup, the AI may call these when t
 - **Bounded ticket** via `compile/ready/start/close` when isolation, machine certification, or parallel ownership will save rework.
 
 These capabilities are never required merely because they exist. Do not create ceremonial receipts, reviews, or tickets.
+
+## Live Technical Route
+
+`goal-set --require-detailed` projects the detailed Goal contract into a local,
+read-only route dashboard. The page is served only on `127.0.0.1`, has no
+external assets, and polls the existing North Star and convergence state; it
+cannot mutate project state or become a second source of truth.
+
+- Use `roadmap` to start or recover the page and return its stable URL.
+- Use `roadmap --snapshot` for the same bounded machine-readable projection.
+- Use `roadmap --stop` to stop the local page service.
+- Starting or completing a Goal segment through `convergence` updates the page automatically.
+- Clicking a large node reveals its actions, inputs, outputs, downstream consumers, affected paths/modules, exit criteria, and deadline.
+- `subnodes` are optional. Expand a node into subnodes only when the user asks or the current node is too broad to execute safely; never force decomposition merely to make the diagram look fuller.
+- The dashboard is a visibility aid. It never replaces validation, final acceptance, or the Agent's responsibility to perform the work.
 
 ## Verification And Completion
 

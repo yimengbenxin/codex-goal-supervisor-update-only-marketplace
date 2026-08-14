@@ -105,6 +105,12 @@ from goal_compass_runtime.context_continuity import (
     record_semantic_checkpoint,
 )
 from goal_compass_runtime.goal_return import compact_status as goal_return_status
+from goal_compass_runtime.roadmap import (
+    build_snapshot as build_roadmap_snapshot,
+    ensure_server as ensure_roadmap_server,
+    server_summary as roadmap_server_summary,
+    stop_server as stop_roadmap_server,
+)
 
 
 AGENT = Path(".agent")
@@ -7345,6 +7351,16 @@ def cmd_goal_set(args: argparse.Namespace) -> int:
     data = structured_north_star(args.text, source, definition)
     write_json(NORTH_STAR, data)
     refresh_convergence_projection()
+    roadmap = (
+        ensure_roadmap_server(Path.cwd())
+        if args.require_detailed and definition.get("quality") == "STRUCTURED_DETAILED"
+        else {
+            "status": "NOT_REQUIRED",
+            "url": None,
+            "route_map_ready": definition.get("quality") == "STRUCTURED_DETAILED",
+            "reason": "Live roadmap is mandatory only for an explicitly detailed Goal.",
+        }
+    )
     onboarding_probe = refresh_reuse_discovery({
         "ticket_id": "PROJECT-ONBOARDING",
         "status": "PROJECT_ONBOARDING",
@@ -7361,6 +7377,7 @@ def cmd_goal_set(args: argparse.Namespace) -> int:
         "goal_mode_objective": data.get("goal_mode_objective"),
         "goal_mode_objective_chars": len(str(data.get("goal_mode_objective") or "")),
         "execution_plan_ref": definition.get("execution_plan_ref"),
+        "roadmap": roadmap,
         "reuse": reuse_compact_status(onboarding_probe, AGENT),
     }
     if definition.get("quality") != "STRUCTURED_DETAILED":
@@ -9353,6 +9370,8 @@ def cmd_status(args: argparse.Namespace) -> int:
             "count": backlog_count(),
         },
     }
+    if definition.get("quality") == "STRUCTURED_DETAILED":
+        payload["roadmap"] = roadmap_server_summary(Path.cwd())
     if args.verbose:
         recent = recent_done_tickets(limit=5)
         previous = last_ticket()
@@ -9420,6 +9439,21 @@ def cmd_status(args: argparse.Namespace) -> int:
         })
     print(json.dumps(payload, ensure_ascii=False, indent=2 if args.verbose else None))
     return 0
+
+
+def cmd_roadmap(args: argparse.Namespace) -> int:
+    """Expose the live Goal route without introducing another state machine."""
+    if args.stop:
+        payload = stop_roadmap_server(Path.cwd())
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+    if args.snapshot:
+        payload = build_roadmap_snapshot(Path.cwd())
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0 if payload.get("route_map_ready") else 2
+    payload = ensure_roadmap_server(Path.cwd())
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0 if payload.get("route_map_ready") else 2
 
 
 def cmd_context_note(args: argparse.Namespace) -> int:
@@ -11175,6 +11209,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("status")
     p.add_argument("--verbose", action="store_true")
     p.set_defaults(func=cmd_status)
+    p = sub.add_parser("roadmap")
+    roadmap_mode = p.add_mutually_exclusive_group()
+    roadmap_mode.add_argument("--snapshot", action="store_true")
+    roadmap_mode.add_argument("--stop", action="store_true")
+    p.set_defaults(func=cmd_roadmap)
     p = sub.add_parser("context-note")
     p.add_argument("--directory", required=True)
     p.add_argument("--fact", action="append", default=[])
