@@ -69,6 +69,10 @@ from goal_compass_runtime.goal_return import (
     record_goal_change_confirmation,
     resolve_goal_change_confirmation,
 )
+from goal_compass_runtime.procedure_memory import (
+    finalize_thread as finalize_procedure_thread,
+    record_successful_command as record_procedure_command,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -94,6 +98,8 @@ CONTEXT_CAPSULE = AGENT / "runtime" / "context" / "index.json"
 GOAL_RETURN_STATE = AGENT / "runtime" / "goal_return" / "state.json"
 GOAL_RETURN_LOCK = AGENT / "runtime" / "goal_return" / "state.lock"
 GOAL_RETURN_EVENTS = AGENT / "runtime" / "goal_return" / "events.jsonl"
+PROCEDURE_MEMORY_STATE = AGENT / "runtime" / "procedure_memory.json"
+PROCEDURE_MEMORY_LOCK = AGENT / "runtime" / "procedure_memory.lock"
 FULL_COMPASS = AGENT / "goal_compass.py"
 
 CONTROL_PATTERNS = (
@@ -479,6 +485,11 @@ def handle_context_event(event: dict[str, Any]) -> str | None:
         )
     if phase == "Stop":
         goal_return_stop(GOAL_RETURN_STATE, GOAL_RETURN_LOCK, GOAL_RETURN_EVENTS, north, event)
+        try:
+            with exclusive_file_lock(PROCEDURE_MEMORY_LOCK, timeout=0.2, stale_seconds=30.0):
+                finalize_procedure_thread(PROJECT_ROOT, PROCEDURE_MEMORY_STATE, event)
+        except (OSError, RuntimeError, json.JSONDecodeError):
+            pass
         return None
     if phase == "PreCompact":
         seal_before_compact(PROJECT_ROOT, CONTEXT_STATE, CONTEXT_LOCK, CONTEXT_CAPSULE, event)
@@ -492,6 +503,17 @@ def handle_context_event(event: dict[str, Any]) -> str | None:
         if is_context_read_event(event):
             return record_context_read(PROJECT_ROOT, CONTEXT_STATE, CONTEXT_LOCK, CONTEXT_CAPSULE, event)
     return None
+
+
+def record_procedure_evidence(event: dict[str, Any]) -> None:
+    """Persist only successful deterministic commands; never affect execution."""
+    if event_name(event) != "PostToolUse":
+        return
+    try:
+        with exclusive_file_lock(PROCEDURE_MEMORY_LOCK, timeout=0.2, stale_seconds=30.0):
+            record_procedure_command(PROJECT_ROOT, PROCEDURE_MEMORY_STATE, event)
+    except (OSError, RuntimeError, json.JSONDecodeError, ValueError):
+        return
 
 
 def goal_change_confirmation_context(
@@ -827,6 +849,7 @@ def main() -> int:
         return 0
     phase = event_name(event)
     context_message = handle_context_event(event)
+    record_procedure_evidence(event)
     if phase in {"PreCompact", "PostCompact"}:
         return 0
     if phase in {"SessionStart", "SubagentStart", "UserPromptSubmit"}:

@@ -151,6 +151,7 @@ Codex Goal Supervisor has one public plugin identity. Release numbers describe i
 The plugin has two layers:
 
 - **Implicit background observer:** after explicit project installation, a repo-local hook quietly records small counters and concrete signals. It normally says nothing. It does not require tickets, role receipts, status checks, or cleanup passes.
+- **Project procedure memory:** successful fixed operations are summarized locally without copying chat history. A verified local-service launch produces an idempotent start/status/stop runner; other command sequences require success in two independent tasks before becoming a project-local Skill. Sensitive, destructive, read-only, transient, and shell-composed commands are never materialized.
 - **Explicit capability layer:** explicit activation first requires one structured project North Star and the matching Codex Goal mode. Custodian, Company roles, Auditor, Janitor, MDCP, convergence records, and bounded tickets remain on demand.
 
 North Star setup is not part of the silent observer. When the user explicitly activates Codex Goal Supervisor for a substantive task, the AI must establish or reuse the concise project-owned North Star and start Codex Goal mode with its separate executable contract. The Goal-mode contract is 2,000-3,500 characters. It includes module-level hour targets and the actionable open-source reuse route produced by current research. Super-complex work also references a project plan longer than 4,000 characters while keeping the compressed contract in Goal mode. Unrelated tasks are never auto-enrolled.
@@ -351,6 +352,7 @@ Exact North Star deviation incidents use a separate persistent counter. The same
 - `status` returns current truth, one reason, one next action, compact observer state, and the active ticket summary. Use `status --verbose` for company, MDCP, feedback, reuse, hook, and checkpoint details.
 - `convergence` returns the L0-L3 goal stack, evidence progress, activity counters, iteration state, and recovery checkpoint. `convergence --record-iteration ...` records a high-cost experiment; `convergence --judge ...` explicitly asks the sparse Judge.
 - `roadmap` starts or recovers the local route dashboard. `roadmap --snapshot` returns its bounded projection and `roadmap --stop` stops the service. The page reads `.agent/north_star_goal.json` and `.agent/runtime/convergence_state.json`, binds only to `127.0.0.1`, and never becomes authoritative state.
+- `procedure` returns the compact reusable-procedure index. Load only the matching `.agent/procedures/<id>/SKILL.md`; its bundled runner avoids relearning an already verified local service or fixed workflow.
 - `onboard-scan` still writes the full JSON/Markdown reports, but stdout contains only alignment, evidence counts, classification counts, and report paths. Use `onboard-scan --verbose` to print the inventory.
 - An unconfirmed North Star is `NEEDS_CONFIRMATION`, not a command failure. Destructive cleanup remains unavailable until confirmation.
 

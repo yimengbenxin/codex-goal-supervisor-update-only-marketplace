@@ -43,6 +43,16 @@ does not trigger the large-read path, tiny searches do not accumulate as broad
 reads, and subagents are recommended only when at least two independent slices
 exist. A saved directory conclusion becomes `STALE` when its evidence changes.
 
+Repeated operational knowledge is kept separately from source-reading
+continuity. The hook records successful deterministic commands and one bounded,
+redacted task outcome. A recognized local-service launch generates a
+project-local Skill and start/status/stop runner after its first observed
+success. Other fixed command sequences require matching success in two
+independent tasks. Use `procedure` to inspect the compact index and load only a
+matching `.agent/procedures/<id>/SKILL.md`. Commands containing credentials,
+arbitrary shell composition, destructive operations, transient paths, or
+ordinary reads are never converted into executable procedures.
+
 The same deviation is rechecked after 30 minutes of continued affected-path work. Unrelated success does not clear it. Judge results are structured and cached; unavailable, malformed, or timed-out judgment fails open. `deviation-correct` opens a scoped repair lane; `deviation-corrected` starts seven days of active recurrence monitoring. A recurrence restores the rail immediately. Counts clear only after explicit correction, seven clean days, and real project activity.
 
 ## Explicit Optional Layer

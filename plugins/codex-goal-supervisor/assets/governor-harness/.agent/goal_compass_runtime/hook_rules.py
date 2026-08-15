@@ -8,7 +8,7 @@ from typing import Any
 
 
 FAILURE_STATUSES = {"error", "failed", "failure"}
-EXIT_CODE_FIELDS = ("exit_code", "exitCode", "returncode", "returnCode", "return_code")
+EXIT_CODE_FIELDS = ("exit_code", "exit-code", "exitCode", "returncode", "returnCode", "return_code")
 
 
 def _basename(value: str) -> str:

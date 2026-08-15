@@ -111,6 +111,10 @@ from goal_compass_runtime.roadmap import (
     server_summary as roadmap_server_summary,
     stop_server as stop_roadmap_server,
 )
+from goal_compass_runtime.procedure_memory import (
+    compact_status as procedure_memory_status,
+    empty_state as empty_procedure_memory_state,
+)
 
 
 AGENT = Path(".agent")
@@ -136,6 +140,7 @@ AGENT_DOCS = AGENT / "docs"
 SELFTEST = AGENT / "selftest"
 PROTOCOLS = AGENT / "protocols"
 COORDINATION_CONTRACTS = AGENT / "contracts"
+PROCEDURES = AGENT / "procedures"
 RUNTIME = AGENT / "runtime"
 BASELINES = RUNTIME / "baselines"
 HOOK_STATE = RUNTIME / "hook_state.json"
@@ -153,6 +158,7 @@ LLM_JUDGE_CACHE = RUNTIME / "llm_judge_cache.json"
 CONTEXT_CONTINUITY_STATE = RUNTIME / "context_continuity.json"
 CONTEXT_CAPSULE = RUNTIME / "context" / "index.json"
 GOAL_RETURN_STATE = RUNTIME / "goal_return" / "state.json"
+PROCEDURE_MEMORY_STATE = RUNTIME / "procedure_memory.json"
 LLM_JUDGE_SCHEMA_PATH = PROTOCOLS / "llm_judge.schema.json"
 HOOKS = CODEX / "hooks.json"
 PARALLEL_REGISTRY_DIR = "goal-compass"
@@ -8882,7 +8888,7 @@ def cmd_onboard_scan(args: argparse.Namespace) -> int:
 
 
 def cmd_init(_: argparse.Namespace) -> int:
-    for path in (AGENT, CODEX, LENSES, PENDING, DONE, FAILED, AGENT_DOCS, SELFTEST, PROTOCOLS, COORDINATION_CONTRACTS, RUNTIME, BASELINES):
+    for path in (AGENT, CODEX, LENSES, PENDING, DONE, FAILED, AGENT_DOCS, SELFTEST, PROTOCOLS, COORDINATION_CONTRACTS, PROCEDURES, RUNTIME, BASELINES):
         path.mkdir(parents=True, exist_ok=True)
     if not NORTH_STAR.exists():
         write_json(NORTH_STAR, UNCONFIRMED_NORTH_STAR)
@@ -8947,6 +8953,14 @@ def cmd_init(_: argparse.Namespace) -> int:
         write_json(OBSERVER_STATE, empty_observer_state())
     if not CONVERGENCE_STATE.exists():
         write_json(CONVERGENCE_STATE, empty_convergence_state())
+    if not PROCEDURE_MEMORY_STATE.exists():
+        write_json(PROCEDURE_MEMORY_STATE, empty_procedure_memory_state())
+    if not (PROCEDURES / "index.json").exists():
+        write_json(PROCEDURES / "index.json", {
+            "schema_version": 1,
+            "procedures": [],
+            "usage": "Read this compact index before rediscovering a repeated project operation; load only the matching SKILL.md.",
+        })
     BACKLOG.touch(exist_ok=True)
     REQUEST_DECISIONS.touch(exist_ok=True)
     QUARANTINE_MANIFEST.touch(exist_ok=True)
@@ -9424,6 +9438,7 @@ def cmd_status(args: argparse.Namespace) -> int:
             "context_continuity": context_continuity_status(
                 Path.cwd(), CONTEXT_CONTINUITY_STATE, CONTEXT_CAPSULE,
             ),
+            "procedures": procedure_memory_status(Path.cwd(), PROCEDURE_MEMORY_STATE),
             "goal_return": goal_return_status(GOAL_RETURN_STATE),
             "mdcp": {
                 "precision_level": mdcp_fields.get("precision_level"),
@@ -9454,6 +9469,34 @@ def cmd_roadmap(args: argparse.Namespace) -> int:
     payload = ensure_roadmap_server(Path.cwd())
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0 if payload.get("route_map_ready") else 2
+
+
+def cmd_procedure(args: argparse.Namespace) -> int:
+    """List reusable project procedures without loading historical thread text."""
+    index = load_json(PROCEDURES / "index.json", {"schema_version": 1, "procedures": []})
+    rows = index.get("procedures") if isinstance(index.get("procedures"), list) else []
+    if args.id:
+        target = next((row for row in rows if isinstance(row, dict) and row.get("procedure_id") == args.id), None)
+        if target is None:
+            print(json.dumps({"status": "NOT_FOUND", "procedure_id": args.id}, ensure_ascii=False))
+            return 2
+        detail = load_json(PROCEDURES / args.id / "procedure.json", target)
+        print(json.dumps({"status": "READY", "procedure": detail}, ensure_ascii=False, indent=2))
+        return 0
+    payload = {
+        "status": "READY" if rows else "EMPTY",
+        "ready_count": len(rows),
+        "procedures": rows if args.verbose else [
+            {
+                key: row.get(key)
+                for key in ("procedure_id", "kind", "display", "runner_path")
+            }
+            for row in rows if isinstance(row, dict)
+        ],
+        "selection_rule": "load only the matching SKILL.md; do not reread unrelated setup files",
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2 if args.verbose else None))
+    return 0
 
 
 def cmd_context_note(args: argparse.Namespace) -> int:
@@ -11214,6 +11257,10 @@ def build_parser() -> argparse.ArgumentParser:
     roadmap_mode.add_argument("--snapshot", action="store_true")
     roadmap_mode.add_argument("--stop", action="store_true")
     p.set_defaults(func=cmd_roadmap)
+    p = sub.add_parser("procedure")
+    p.add_argument("--id")
+    p.add_argument("--verbose", action="store_true")
+    p.set_defaults(func=cmd_procedure)
     p = sub.add_parser("context-note")
     p.add_argument("--directory", required=True)
     p.add_argument("--fact", action="append", default=[])
