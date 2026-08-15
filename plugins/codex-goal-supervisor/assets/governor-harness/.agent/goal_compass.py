@@ -2088,6 +2088,7 @@ def goal_definition_from_payload(goal: str, payload: dict[str, Any]) -> dict[str
 
 def structured_north_star(goal: str, source: str, definition: dict[str, Any] | None = None) -> dict[str, Any]:
     definition = definition if isinstance(definition, dict) else goal_definition_contract(goal)
+    goal_mode_objective = render_goal_mode_objective(definition)
     clauses = []
     for raw in re.split(r"[\n,，;；。]+", goal):
         value = raw.strip()
@@ -2119,7 +2120,12 @@ def structured_north_star(goal: str, source: str, definition: dict[str, Any] | N
         "candidate_goals": [],
         "requires_confirmation": False,
         "goal_definition": definition,
-        "goal_mode_objective": render_goal_mode_objective(definition),
+        "goal_mode_objective": goal_mode_objective,
+        "native_goal_contract": {
+            "objective_source_field": "goal_mode_objective",
+            "objective_chars": len(goal_mode_objective),
+            "objective_sha256": sha256_bytes(goal_mode_objective.encode("utf-8")),
+        },
     }
 
 
@@ -7382,6 +7388,16 @@ def cmd_goal_set(args: argparse.Namespace) -> int:
         "goal_definition": goal_definition_summary(data),
         "goal_mode_objective": data.get("goal_mode_objective"),
         "goal_mode_objective_chars": len(str(data.get("goal_mode_objective") or "")),
+        "native_goal_sync": {
+            "status": "CREATE_REQUIRED",
+            "objective_source_field": "goal_mode_objective",
+            "objective_chars": data.get("native_goal_contract", {}).get("objective_chars"),
+            "objective_sha256": data.get("native_goal_contract", {}).get("objective_sha256"),
+            "required_action": (
+                "Call the Codex native create_goal tool with the exact top-level goal_mode_objective, "
+                "then call get_goal and verify exact objective equality before implementation."
+            ),
+        },
         "execution_plan_ref": definition.get("execution_plan_ref"),
         "roadmap": roadmap,
         "reuse": reuse_compact_status(onboarding_probe, AGENT),
