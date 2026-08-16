@@ -114,6 +114,17 @@ from goal_compass_runtime.roadmap import (
 from goal_compass_runtime.procedure_memory import (
     compact_status as procedure_memory_status,
     empty_state as empty_procedure_memory_state,
+    normalize_command as normalize_procedure_command,
+    record_successful_command as record_procedure_command,
+)
+from goal_compass_runtime.phased_goal import (
+    MODE as STRUCTURED_PHASE_MODE,
+    activate as activate_structured_phase,
+    compact as compact_program_phase,
+    complete as complete_structured_phase,
+    record_activity as record_structured_phase_activity,
+    validate_outline as validate_program_outline,
+    validate_phase as validate_structured_phase,
 )
 
 
@@ -166,6 +177,7 @@ PARALLEL_REGISTRY_FILE = "active-tickets.json"
 
 MISMATCH_MESSAGE = "目标与项目内容不一致，请确认这个项目的原始目标。"
 NORTH_STAR_CONFIRMATION_MESSAGE = "North Star is not confirmed. Confirm the project goal before goal-bound decisions."
+PROJECT_GOAL_EVIDENCE_MESSAGE = "Confirmed North Star exists, but project files do not yet provide enough goal evidence. Add or clarify a project Goal/README before alignment-sensitive cleanup."
 EDGE_CASE_MESSAGE = "A valid edge case must not redefine the core product."
 MISSING_ACCEPTANCE_MESSAGE = "missing machine-checkable acceptance"
 NO_PASS_ACCEPTANCE_MESSAGE = "No machine-checkable acceptance. Refusing PASS."
@@ -3052,6 +3064,14 @@ def goal_match(text: str, north: dict[str, Any] | None = None) -> dict[str, Any]
             "contradicting_evidence": [],
             "required_action": "confirm_north_star",
         }
+    if not canonical_text(text).strip() or canonical_text(text).strip() == canonical_text("Unknown project goal.").strip():
+        return {
+            "status": "UNKNOWN",
+            "alignment_score": 0.0,
+            "supporting_evidence": [],
+            "contradicting_evidence": [],
+            "required_action": "add_project_goal_evidence",
+        }
     if canonical_text(text).strip() == canonical_text(str(north.get("goal"))).strip():
         return {
             "status": "ALIGNED",
@@ -3157,6 +3177,8 @@ def goal_report(candidate_goals: list[dict[str, Any]], status: str = "UNKNOWN", 
         contradictions = check["contradicting_evidence"]
         if check["status"] == "MISMATCH" and MISMATCH_MESSAGE not in contradictions:
             contradictions.append(MISMATCH_MESSAGE)
+    requires_confirmation = not bool(north.get("confirmed"))
+    required_action = "confirm_north_star" if requires_confirmation else "add_project_goal_evidence" if status == "UNKNOWN" else "continue"
     return {
         "detected_candidate_goals": candidate_goals,
         "confirmed_north_star_goal": north.get("goal"),
@@ -3164,8 +3186,8 @@ def goal_report(candidate_goals: list[dict[str, Any]], status: str = "UNKNOWN", 
         "user_goal": user_goal,
         "alignment_status": status,
         "contradictions": contradictions,
-        "requires_user_confirmation": not bool(north.get("confirmed")),
-        "required_action": "confirm_north_star" if not north.get("confirmed") else "continue",
+        "requires_user_confirmation": requires_confirmation,
+        "required_action": required_action,
     }
 
 
@@ -3204,7 +3226,12 @@ def write_goal_report(report: dict[str, Any]) -> None:
     if report.get("alignment_status") == "MISMATCH":
         lines.extend(["", MISMATCH_MESSAGE])
     elif report.get("alignment_status") == "UNKNOWN":
-        lines.extend(["", NORTH_STAR_CONFIRMATION_MESSAGE])
+        lines.extend([
+            "",
+            NORTH_STAR_CONFIRMATION_MESSAGE
+            if report.get("requires_user_confirmation")
+            else PROJECT_GOAL_EVIDENCE_MESSAGE,
+        ])
     GOAL_REPORT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -3219,7 +3246,12 @@ def goal_allows_ticket(ticket: dict[str, Any]) -> tuple[bool, str]:
     return True, "ok"
 
 
-def run(cmd: list[str], timeout: int = 10) -> subprocess.CompletedProcess[str]:
+def run(
+    cmd: list[str],
+    timeout: int = 10,
+    *,
+    input_text: str | None = None,
+) -> subprocess.CompletedProcess[str]:
     creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0
     try:
         proc = subprocess.Popen(
@@ -3227,13 +3259,14 @@ def run(cmd: list[str], timeout: int = 10) -> subprocess.CompletedProcess[str]:
             text=True,
             encoding="utf-8",
             errors="replace",
+            stdin=subprocess.PIPE if input_text is not None else None,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             start_new_session=os.name != "nt",
             creationflags=creationflags,
         )
         try:
-            stdout, stderr = proc.communicate(timeout=timeout)
+            stdout, stderr = proc.communicate(input=input_text, timeout=timeout)
             return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
         except subprocess.TimeoutExpired:
             if os.name == "nt":
@@ -7408,6 +7441,138 @@ def cmd_goal_set(args: argparse.Namespace) -> int:
     return 0
 
 
+def phase_contract_file(value: str | None) -> tuple[dict[str, Any], str | None]:
+    raw = str(value or "").strip()
+    if not raw:
+        return {}, "contract file is required"
+    try:
+        path = (Path.cwd() / Path(raw)).resolve() if not Path(raw).is_absolute() else Path(raw).resolve()
+        path.relative_to(Path.cwd().resolve())
+        if not path.is_file() or path.stat().st_size > 2_000_000:
+            return {}, f"contract file is missing or too large: {raw}"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
+        return {}, f"invalid contract file {raw}: {exc}"
+    return payload if isinstance(payload, dict) else {}, None if isinstance(payload, dict) else f"contract file must contain a JSON object: {raw}"
+
+
+def phase_native_goal_sync(objective: str, status: str = "CREATE_REQUIRED") -> dict[str, Any]:
+    return {
+        "status": status,
+        "objective_source_field": "program_phase.current_phase.goal_mode_objective",
+        "objective_chars": len(objective),
+        "objective_sha256": sha256_bytes(objective.encode("utf-8")),
+        "required_action": "Replace the Codex native Goal with this exact current-phase objective before phase implementation.",
+    }
+
+
+def sync_current_phase_goal(definition: dict[str, Any], objective: str, phase_id: str) -> dict[str, Any]:
+    data = load_json(NORTH_STAR, {})
+    data["goal_definition"] = definition
+    data["goal_mode_objective"] = objective
+    data["active_program_phase_id"] = phase_id
+    data["native_goal_contract"] = {
+        "objective_source_field": "goal_mode_objective",
+        "objective_chars": len(objective),
+        "objective_sha256": sha256_bytes(objective.encode("utf-8")),
+    }
+    write_json(NORTH_STAR, data)
+    return data
+
+
+def structured_phase_contract(
+    phase_payload: dict[str, Any],
+    outline: dict[str, Any],
+    completed_phase_ids: set[str],
+) -> tuple[dict[str, Any], list[str]]:
+    raw = dict(phase_payload)
+    wrappers = [
+        raw,
+        raw.get("phase_definition") if isinstance(raw.get("phase_definition"), dict) else {},
+        raw.get("phase") if isinstance(raw.get("phase"), dict) else {},
+    ]
+    candidates = [
+        wrapper.get(key)
+        for wrapper in wrappers
+        for key in ("goal_definition", "detailed_goal_definition")
+        if isinstance(wrapper.get(key), dict)
+    ]
+    definition_fields = {
+        "precise_goal", "problem_statement", "current_state", "desired_state",
+        "stakeholders", "source_requirements", "first_principles", "process",
+        "deliverables", "final_acceptance", "constraints", "non_goals",
+    }
+    raw_definition = max(
+        candidates,
+        key=lambda candidate: len(definition_fields.intersection(candidate)),
+        default={},
+    )
+    raw_definition = dict(raw_definition)
+    if "planning_research" not in raw_definition and isinstance(raw.get("planning_research"), dict):
+        raw_definition = {**raw_definition, "planning_research": raw["planning_research"]}
+    raw["goal_definition"] = raw_definition
+    if not raw.get("phase_id") and raw.get("id"):
+        raw["phase_id"] = raw["id"]
+    if not raw.get("estimated_hours") and raw.get("timebox_hours"):
+        raw["estimated_hours"] = raw["timebox_hours"]
+    if not raw.get("dependencies") and isinstance(raw.get("depends_on"), list):
+        raw["dependencies"] = raw["depends_on"]
+    if not raw.get("validation_ids") and isinstance(raw.get("validation_catalog_ids"), list):
+        raw["validation_ids"] = raw["validation_catalog_ids"]
+    goal = confirmed_goal() or ""
+    definition = goal_definition_from_payload(goal, raw)
+    explicit_objective = next((
+        str(wrapper.get("goal_mode_objective") or "").strip()
+        for wrapper in wrappers
+        if str(wrapper.get("goal_mode_objective") or "").strip()
+    ), "")
+    objective = explicit_objective or render_goal_mode_objective(definition)
+    missing_fields = list(definition.get("missing_fields") or [])
+    length_error = f"goal_mode_objective_chars={GOAL_MODE_OBJECTIVE_MIN_CHARS}..{GOAL_MODE_OBJECTIVE_MAX_CHARS}"
+    structural_missing = [field for field in missing_fields if field != length_error]
+    if (
+        explicit_objective
+        and GOAL_MODE_OBJECTIVE_MIN_CHARS <= len(explicit_objective) <= GOAL_MODE_OBJECTIVE_MAX_CHARS
+        and not structural_missing
+    ):
+        definition["quality"] = "STRUCTURED_DETAILED"
+        definition["missing_fields"] = []
+        metrics = dict(definition.get("detail_metrics") or {})
+        metrics["goal_mode_objective_chars"] = len(explicit_objective)
+        definition["detail_metrics"] = metrics
+    phase, errors = validate_structured_phase(raw, outline, definition, objective, completed_phase_ids)
+    unknown = [command_id for command_id in phase.get("validation_ids", []) if command_id not in catalog()]
+    if unknown:
+        errors.append("unknown phase validation ids: " + ", ".join(unknown))
+    return phase, errors
+
+
+def phase_validation_result(phase: dict[str, Any]) -> tuple[bool, dict[str, Any], list[str]]:
+    ids = [str(value) for value in phase.get("validation_ids", []) if str(value)]
+    ticket = {
+        "ticket_id": "PROGRAM-PHASE-" + str(phase.get("phase_id") or "UNKNOWN"),
+        "status": "ACTIVE",
+        "acceptance_ready": True,
+        "acceptance": {
+            "commands_pass": ids,
+            "files_exist": [],
+            "contains": [],
+            "assertions": [],
+            "files_not_changed": [],
+        },
+        "validation_ids": ids,
+        "validation_lifecycle": {},
+        "read_dependencies": [],
+        "writable_paths": [],
+        "allowed_paths": [],
+        "forbidden_paths": [],
+        "budget": {},
+        "budget_used": {"changed_files": [], "immutable_changes": []},
+    }
+    ok, reasons = acceptance_result(ticket, run_commands=True)
+    return ok, dict(ticket.get("validation_run") or {}), reasons
+
+
 def cmd_phase_set(args: argparse.Namespace) -> int:
     existing = program_phase()
     if existing.get("status") == "ACTIVE":
@@ -7415,8 +7580,58 @@ def cmd_phase_set(args: argparse.Namespace) -> int:
             "ok": False,
             "error": "an ACTIVE program phase already exists",
             "phase_id": existing.get("phase_id"),
-            "required_action": "phase-complete or phase-advance",
+            "required_action": "phase-complete",
         }, ensure_ascii=False, indent=2))
+        return 2
+    if args.outline_file or args.definition_file:
+        if not args.outline_file or not args.definition_file:
+            print(json.dumps({"ok": False, "error": "structured phase-set requires --outline-file and --definition-file"}, ensure_ascii=False))
+            return 2
+        goal = confirmed_goal()
+        if not goal:
+            print(json.dumps({"ok": False, "error": "confirm the North Star before creating a structured program phase"}, ensure_ascii=False))
+            return 2
+        outline_payload, error = phase_contract_file(args.outline_file)
+        if error:
+            print(json.dumps({"ok": False, "error": error}, ensure_ascii=False))
+            return 2
+        outline, errors = validate_program_outline(outline_payload, goal)
+        phase_payload, error = phase_contract_file(args.definition_file)
+        if error:
+            errors.append(error)
+            phase_payload = {}
+        phase, phase_errors = structured_phase_contract(phase_payload, outline, set())
+        errors.extend(phase_errors)
+        if errors:
+            print(json.dumps({
+                "ok": False,
+                "status": "PHASE_CONTRACT_INCOMPLETE",
+                "errors": errors,
+                "contract_reference": ".agent/docs/README_GOAL_COMPASS.md#structured-phased-goal-input",
+            }, ensure_ascii=False, indent=2))
+            return 2
+        observed_at = now()
+        payload = activate_structured_phase(
+            north_star_goal=goal,
+            outline=outline,
+            phase=phase,
+            observed_at=observed_at,
+        )
+        payload["north_star_goal_sha256"] = sha256_bytes(goal.encode("utf-8"))
+        sync_current_phase_goal(phase["goal_definition"], phase["goal_mode_objective"], phase["phase_id"])
+        write_json(PROGRAM_PHASE, payload)
+        refresh_convergence_projection()
+        roadmap = ensure_roadmap_server(Path.cwd())
+        print(json.dumps({
+            "ok": True,
+            "program_phase": compact_program_phase(payload),
+            "goal_mode_objective": phase["goal_mode_objective"],
+            "native_goal_sync": phase_native_goal_sync(phase["goal_mode_objective"]),
+            "roadmap": roadmap,
+        }, ensure_ascii=False, indent=2))
+        return 0
+    if not args.id or not args.goal:
+        print(json.dumps({"ok": False, "error": "legacy phase-set requires --id and --goal"}, ensure_ascii=False))
         return 2
     payload = {
         "status": "ACTIVE",
@@ -7433,15 +7648,27 @@ def cmd_phase_set(args: argparse.Namespace) -> int:
     return 0
 
 
-def complete_program_phase(reason: str, ticket_id: str | None = None) -> dict[str, Any]:
+def complete_program_phase(
+    reason: str,
+    ticket_id: str | None = None,
+    *,
+    validated: bool = False,
+    validation: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     phase = program_phase()
     if phase.get("status") != "ACTIVE":
         return phase
-    phase = dict(phase)
-    phase["status"] = "COMPLETED"
-    phase["completed_at"] = now()
-    phase["completion_reason"] = reason
-    phase["completed_by_ticket_id"] = ticket_id
+    if phase.get("mode") == STRUCTURED_PHASE_MODE:
+        if not validated:
+            return {**phase, "completion_blocked": True, "required_action": "phase-complete"}
+        phase = complete_structured_phase(phase, now(), reason, validation or {})
+        phase["completed_by_ticket_id"] = ticket_id
+    else:
+        phase = dict(phase)
+        phase["status"] = "COMPLETED"
+        phase["completed_at"] = now()
+        phase["completion_reason"] = reason
+        phase["completed_by_ticket_id"] = ticket_id
     write_json(PROGRAM_PHASE, phase)
     refresh_convergence_projection(current_action="", expected_evidence="")
     return phase
@@ -7452,13 +7679,88 @@ def cmd_phase_complete(args: argparse.Namespace) -> int:
     if phase.get("status") != "ACTIVE":
         print(json.dumps({"ok": False, "error": "no ACTIVE program phase"}, ensure_ascii=False))
         return 1
-    completed = complete_program_phase(args.reason)
+    if phase.get("mode") == STRUCTURED_PHASE_MODE:
+        ok, validation, reasons = phase_validation_result(phase.get("current_phase", {}))
+        if not ok:
+            current = dict(phase.get("current_phase") or {})
+            telemetry = dict(current.get("telemetry") or {})
+            telemetry["validation_attempts"] = int(telemetry.get("validation_attempts") or 0) + 1
+            telemetry["last_validation_at"] = now()
+            telemetry["last_validation_status"] = "FAIL"
+            current["telemetry"] = telemetry
+            phase = {**phase, "current_phase": current}
+            write_json(PROGRAM_PHASE, phase)
+            print(json.dumps({
+                "ok": False,
+                "status": "PHASE_VALIDATION_FAILED",
+                "reasons": reasons,
+                "validation": validation,
+                "program_phase": compact_program_phase(phase),
+            }, ensure_ascii=False, indent=2))
+            return 1
+        completed = complete_program_phase(args.reason, validated=True, validation=validation)
+    else:
+        completed = complete_program_phase(args.reason)
     print(json.dumps({"ok": True, "program_phase": completed}, ensure_ascii=False, indent=2))
     return 0
 
 
 def cmd_phase_advance(args: argparse.Namespace) -> int:
     previous = program_phase()
+    if args.definition_file or previous.get("mode") == STRUCTURED_PHASE_MODE:
+        if previous.get("mode") != STRUCTURED_PHASE_MODE:
+            print(json.dumps({"ok": False, "error": "structured phase-advance requires a structured program phase"}, ensure_ascii=False))
+            return 2
+        if previous.get("status") == "ACTIVE":
+            print(json.dumps({"ok": False, "error": "complete and validate the ACTIVE phase before advancing", "required_action": "phase-complete"}, ensure_ascii=False))
+            return 2
+        if not args.definition_file:
+            print(json.dumps({"ok": False, "error": "structured phase-advance requires --definition-file"}, ensure_ascii=False))
+            return 2
+        phase_payload, error = phase_contract_file(args.definition_file)
+        if error:
+            print(json.dumps({"ok": False, "error": error}, ensure_ascii=False))
+            return 2
+        completed_ids = {
+            str(row.get("phase_id")) for row in previous.get("completed_phases", [])
+            if isinstance(row, dict) and row.get("phase_id")
+        }
+        outline = previous.get("program_outline") if isinstance(previous.get("program_outline"), dict) else {}
+        phase, errors = structured_phase_contract(phase_payload, outline, completed_ids)
+        if errors:
+            print(json.dumps({
+                "ok": False,
+                "status": "PHASE_CONTRACT_INCOMPLETE",
+                "errors": errors,
+                "contract_reference": ".agent/docs/README_GOAL_COMPASS.md#structured-phased-goal-input",
+            }, ensure_ascii=False, indent=2))
+            return 2
+        observed_at = now()
+        payload = activate_structured_phase(
+            north_star_goal=str(previous.get("north_star_goal") or confirmed_goal() or ""),
+            outline=outline,
+            phase=phase,
+            observed_at=observed_at,
+            completed_phases=list(previous.get("completed_phases") or []),
+            previous_phase_id=str(previous.get("phase_id") or "") or None,
+        )
+        payload["north_star_goal_sha256"] = previous.get("north_star_goal_sha256")
+        sync_current_phase_goal(phase["goal_definition"], phase["goal_mode_objective"], phase["phase_id"])
+        write_json(PROGRAM_PHASE, payload)
+        refresh_convergence_projection()
+        roadmap = ensure_roadmap_server(Path.cwd())
+        print(json.dumps({
+            "ok": True,
+            "previous_phase": compact_program_phase(previous),
+            "program_phase": compact_program_phase(payload),
+            "goal_mode_objective": phase["goal_mode_objective"],
+            "native_goal_sync": phase_native_goal_sync(phase["goal_mode_objective"], "CREATE_REQUIRED_AFTER_PREVIOUS_COMPLETE"),
+            "roadmap": roadmap,
+        }, ensure_ascii=False, indent=2))
+        return 0
+    if not args.id or not args.goal:
+        print(json.dumps({"ok": False, "error": "legacy phase-advance requires --id and --goal"}, ensure_ascii=False))
+        return 2
     if previous.get("status") == "ACTIVE":
         previous = complete_program_phase(args.reason)
     payload = {
@@ -7488,7 +7790,11 @@ def cmd_goal_detect(_: argparse.Namespace) -> int:
         north["requires_confirmation"] = True
         write_json(NORTH_STAR, north)
     report = goal_report(candidates, status=status)
-    report["status"] = "NEEDS_CONFIRMATION" if status == "UNKNOWN" else status
+    if status == "UNKNOWN":
+        report["status"] = "NEEDS_CONFIRMATION" if not north.get("confirmed") else "NEEDS_PROJECT_EVIDENCE"
+        report["message"] = NORTH_STAR_CONFIRMATION_MESSAGE if not north.get("confirmed") else PROJECT_GOAL_EVIDENCE_MESSAGE
+    else:
+        report["status"] = status
     write_goal_report(report)
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0
@@ -8854,7 +9160,10 @@ def cmd_onboard_scan(args: argparse.Namespace) -> int:
         "shit_mountain_candidates": [item for item in inventory if item.get("classification") == "QUARANTINE_CANDIDATE"][:20],
         "janitor_policy": {"capability_level": JANITOR_CAPABILITY_LEVEL, "moves_files": False, "deletes_files": False},
     }
-    report["status"] = "NEEDS_CONFIRMATION" if status == "UNKNOWN" else status
+    if status == "UNKNOWN":
+        report["status"] = "NEEDS_CONFIRMATION" if not north.get("confirmed") else "NEEDS_PROJECT_EVIDENCE"
+    else:
+        report["status"] = status
     write_goal_report(report)
     if args.verbose:
         output = report
@@ -8898,7 +9207,11 @@ def cmd_onboard_scan(args: argparse.Namespace) -> int:
             },
         }
         if status == "UNKNOWN":
-            output["message"] = NORTH_STAR_CONFIRMATION_MESSAGE
+            output["message"] = (
+                NORTH_STAR_CONFIRMATION_MESSAGE
+                if not north.get("confirmed")
+                else PROJECT_GOAL_EVIDENCE_MESSAGE
+            )
     print(json.dumps(output, ensure_ascii=False, indent=2 if args.verbose else None))
     return 0 if status in {"ALIGNED", "PARTIAL", "UNKNOWN"} else 1
 
@@ -9400,6 +9713,9 @@ def cmd_status(args: argparse.Namespace) -> int:
             "count": backlog_count(),
         },
     }
+    phase_state = program_phase()
+    if phase_state.get("status") != "UNSET":
+        payload["program_phase"] = compact_program_phase(phase_state)
     if definition.get("quality") == "STRUCTURED_DETAILED":
         payload["roadmap"] = roadmap_server_summary(Path.cwd())
     if args.verbose:
@@ -9489,6 +9805,58 @@ def cmd_roadmap(args: argparse.Namespace) -> int:
 
 def cmd_procedure(args: argparse.Namespace) -> int:
     """List reusable project procedures without loading historical thread text."""
+    if args.remember_verified_service:
+        evidence_value = str(args.evidence or "").strip()
+        evidence_path = Path(evidence_value)
+        try:
+            resolved_evidence = (Path.cwd() / evidence_path).resolve()
+            resolved_evidence.relative_to(Path.cwd().resolve())
+        except (OSError, ValueError):
+            resolved_evidence = None
+        if (
+            not evidence_value
+            or evidence_path.is_absolute()
+            or resolved_evidence is None
+            or not resolved_evidence.is_file()
+            or resolved_evidence.stat().st_size <= 0
+            or resolved_evidence.stat().st_size > 2_000_000
+        ):
+            print(json.dumps({
+                "status": "REFUSED",
+                "reason": "verified service fallback requires one non-empty project-local evidence file",
+            }, ensure_ascii=False))
+            return 2
+        normalized = normalize_procedure_command(args.remember_verified_service, Path.cwd())
+        if not normalized or normalized.get("kind") != "LOCAL_SERVICE":
+            print(json.dumps({
+                "status": "REFUSED",
+                "reason": "only a safely parsed local-service launch can use the verified fallback",
+            }, ensure_ascii=False))
+            return 2
+        evidence_digest = sha256_bytes(resolved_evidence.read_bytes())
+        event = {
+            "session_id": f"verified-service:{evidence_digest[:20]}",
+            "hook_event_name": "PostToolUse",
+            "tool_input": {"command": args.remember_verified_service},
+            "tool_response": {"exit_code": 0},
+        }
+        try:
+            with exclusive_file_lock(RUNTIME / "procedure_memory.lock", timeout=1.0, stale_seconds=30.0):
+                promoted = record_procedure_command(Path.cwd(), PROCEDURE_MEMORY_STATE, event)
+        except (OSError, RuntimeError, json.JSONDecodeError, ValueError) as exc:
+            print(json.dumps({"status": "FAIL", "reason": str(exc)}, ensure_ascii=False))
+            return 2
+        if not promoted:
+            print(json.dumps({"status": "FAIL", "reason": "service procedure was not materialized"}, ensure_ascii=False))
+            return 2
+        print(json.dumps({
+            "status": "READY",
+            "procedure": promoted,
+            "evidence": evidence_path.as_posix(),
+            "evidence_sha256": evidence_digest,
+            "capture_mode": "EXPLICIT_ACTIVATION_FALLBACK",
+        }, ensure_ascii=False, indent=2))
+        return 0
     index = load_json(PROCEDURES / "index.json", {"schema_version": 1, "procedures": []})
     rows = index.get("procedures") if isinstance(index.get("procedures"), list) else []
     if args.id:
@@ -10677,8 +11045,31 @@ def hook_pre(event: dict[str, Any]) -> int:
     return 0
 
 
+def record_program_phase_activity(event: dict[str, Any]) -> None:
+    phase = program_phase()
+    if phase.get("mode") != STRUCTURED_PHASE_MODE or phase.get("status") != "ACTIVE":
+        return
+    category = hook_tool_category(event)
+    if category == "write":
+        product_paths = [path for path in hook_write_paths(event) if not is_generated(path)]
+        if not product_paths:
+            return
+    updated, changed = record_structured_phase_activity(
+        phase,
+        category,
+        hook_event_failed(event),
+        now(),
+    )
+    if changed:
+        write_json(PROGRAM_PHASE, updated)
+
+
 def hook_post(event: dict[str, Any]) -> int:
     observer_signals = record_observer_event(event, "PostToolUse")
+    try:
+        record_program_phase_activity(event)
+    except (OSError, RuntimeError, ValueError, json.JSONDecodeError):
+        pass
     ticket = current_ticket()
     if ticket.get("status") != "ACTIVE":
         if observer_signals:
@@ -11005,8 +11396,12 @@ def cmd_convergence(args: argparse.Namespace) -> int:
         if completion_status == "CERTIFIED_COMPLETE":
             phase = program_phase()
             if phase.get("status") == "ACTIVE":
+                phase_validation_ids = set(str(value) for value in phase.get("validation_ids", []) if str(value))
+                phase_is_covered = phase.get("mode") != STRUCTURED_PHASE_MODE or phase_validation_ids.issubset(set(requested_ids))
                 phase_result = complete_program_phase(
-                    "Final North Star regression passed: " + ", ".join(requested_ids)
+                    "Final North Star regression passed: " + ", ".join(requested_ids),
+                    validated=phase_is_covered,
+                    validation=validation_run if phase_is_covered else None,
                 )
             state = refresh_convergence_projection(persist=False)
             evidence_id = "north-star-final-regression:" + str(validation_run.get("input_fingerprint") or north_hash or "pass")[:24]
@@ -11196,6 +11591,18 @@ def cmd_hook(_: argparse.Namespace) -> int:
         return hook_pre(event)
     if event_name == "PostToolUse":
         return hook_post(event)
+    project_hook = AGENT / "goal_compass_runtime" / "project_hook.py"
+    if project_hook.is_file():
+        result = run(
+            [sys.executable, str(project_hook.resolve())],
+            timeout=14,
+            input_text=raw,
+        )
+        if result.returncode == 0:
+            if result.stdout:
+                sys.stdout.write(result.stdout)
+            if result.stderr:
+                sys.stderr.write(result.stderr)
     return 0
 
 
@@ -11218,17 +11625,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--replace-existing", action="store_true")
     p.set_defaults(func=cmd_goal_set)
     p = sub.add_parser("phase-set")
-    p.add_argument("--id", required=True)
-    p.add_argument("--goal", required=True)
+    p.add_argument("--id")
+    p.add_argument("--goal")
     p.add_argument("--exit-criterion", action="append", default=[])
+    p.add_argument("--outline-file")
+    p.add_argument("--definition-file")
     p.set_defaults(func=cmd_phase_set)
     p = sub.add_parser("phase-complete")
     p.add_argument("--reason", required=True)
     p.set_defaults(func=cmd_phase_complete)
     p = sub.add_parser("phase-advance")
-    p.add_argument("--id", required=True)
-    p.add_argument("--goal", required=True)
+    p.add_argument("--id")
+    p.add_argument("--goal")
     p.add_argument("--exit-criterion", action="append", default=[])
+    p.add_argument("--definition-file")
     p.add_argument("--reason", required=True)
     p.set_defaults(func=cmd_phase_advance)
     sub.add_parser("goal-detect").set_defaults(func=cmd_goal_detect)
@@ -11276,6 +11686,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("procedure")
     p.add_argument("--id")
     p.add_argument("--verbose", action="store_true")
+    p.add_argument("--remember-verified-service")
+    p.add_argument("--evidence")
     p.set_defaults(func=cmd_procedure)
     p = sub.add_parser("context-note")
     p.add_argument("--directory", required=True)

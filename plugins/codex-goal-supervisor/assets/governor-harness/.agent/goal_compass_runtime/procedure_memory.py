@@ -198,7 +198,7 @@ import time
 from pathlib import Path
 
 CONTRACT = json.loads({json.dumps(payload)})
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 RUNTIME = ROOT / ".agent" / "runtime" / "procedure_services"
 
 def argv(command):

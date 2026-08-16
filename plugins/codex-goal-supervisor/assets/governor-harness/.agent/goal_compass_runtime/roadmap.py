@@ -9,6 +9,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -53,6 +54,29 @@ def _strings(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item).strip()[:MAX_TEXT] for item in value[:MAX_LIST_ITEMS] if str(item).strip()]
+
+
+def _dependency_node_id(value: Any, node_ids: list[str]) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    exact = [node_id for node_id in node_ids if text.casefold() == node_id.casefold()]
+    if len(exact) == 1:
+        return exact[0]
+    prefixed = [
+        node_id
+        for node_id in node_ids
+        if re.match(
+            rf"^{re.escape(node_id)}(?:\s|[:：/\\—-]|的|$)",
+            text,
+            flags=re.IGNORECASE,
+        )
+    ]
+    return prefixed[0] if len(prefixed) == 1 else text
+
+
+def _dependencies(value: Any, node_ids: list[str]) -> list[str]:
+    return [_dependency_node_id(item, node_ids) for item in _strings(value)]
 
 
 def _actions(value: Any) -> list[dict[str, Any]]:
@@ -114,7 +138,7 @@ def build_snapshot(project_root: Path) -> dict[str, Any]:
     dependent_consumers: dict[str, list[str]] = {node_id: [] for node_id in node_ids}
     for index, item in enumerate(source_nodes):
         consumer_id = str(item.get("node_id") or f"N{index + 1}").strip()
-        for dependency in _strings(item.get("dependencies")):
+        for dependency in _dependencies(item.get("dependencies"), node_ids):
             if dependency in dependent_consumers and consumer_id not in dependent_consumers[dependency]:
                 dependent_consumers[dependency].append(consumer_id)
 
@@ -122,7 +146,7 @@ def build_snapshot(project_root: Path) -> dict[str, Any]:
     edges: list[dict[str, str]] = []
     for index, item in enumerate(source_nodes):
         node_id = str(item.get("node_id") or f"N{index + 1}").strip()
-        dependencies = _strings(item.get("dependencies"))
+        dependencies = _dependencies(item.get("dependencies"), node_ids)
         for dependency in dependencies:
             edges.append({"from": dependency, "to": node_id, "kind": "dependency"})
         if node_id in active:
@@ -284,8 +308,7 @@ def ensure_server(project_root: Path, *, wait_seconds: float = 2.5) -> dict[str,
         "--serve",
         "--project-root",
         str(root),
-        "--token",
-        token,
+        f"--token={token}",
     ]
     kwargs: dict[str, Any] = {
         "cwd": str(root),

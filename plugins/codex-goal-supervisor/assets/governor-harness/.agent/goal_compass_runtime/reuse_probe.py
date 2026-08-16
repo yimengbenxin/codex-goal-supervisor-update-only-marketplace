@@ -51,7 +51,8 @@ LOW_SIGNAL_DIRECT_TERMS = {
     "artifact", "bounded", "deliver", "delivery", "maintain", "maintenance",
     "manager", "management", "pipeline", "product", "quality", "reliable",
     "reliability", "validate", "validated", "validation", "verification",
-    "verify", "workflow",
+    "verify", "workflow", "continuous", "continuously", "large", "operate",
+    "small", "state",
     "产物", "交付", "产品", "可靠", "工作流", "维护", "验证", "质量",
 }
 
@@ -273,7 +274,17 @@ def _candidate(item: dict[str, Any], terms: list[str], languages: list[str], con
         str(item.get("description") or ""),
         " ".join(str(value) for value in item.get("topics", []) if value),
     ]).lower()
-    matched = [term for term in terms if term.lower() in searchable]
+    searchable_tokens = set(
+        re.findall(r"[a-z][a-z0-9_.+-]{2,}|[\u4e00-\u9fff]{2,12}", searchable)
+    )
+    matched = [
+        term for term in terms
+        if (
+            term.lower() in searchable_tokens
+            if re.fullmatch(r"[a-z][a-z0-9_.+-]{2,}", term.lower())
+            else term.lower() in searchable
+        )
+    ]
     distinctive_matches = [term for term in matched if term.lower() not in LOW_SIGNAL_DIRECT_TERMS]
     language = str(item.get("language") or "")
     language_match = not languages or not language or language.lower() in {value.lower() for value in languages}
@@ -281,8 +292,7 @@ def _candidate(item: dict[str, Any], terms: list[str], languages: list[str], con
     license_id = str(license_data.get("spdx_id") or license_data.get("key") or "").strip()
     archived = bool(item.get("archived"))
     direct = bool(
-        len(matched) >= 2
-        and distinctive_matches
+        len(distinctive_matches) >= 3
         and license_id
         and not archived
         and stars >= 50

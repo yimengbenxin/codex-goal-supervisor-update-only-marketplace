@@ -38,6 +38,7 @@ from goal_compass_runtime.observer import (
     queue_pending_event,
 )
 from goal_compass_runtime.state_store import exclusive_file_lock, load_json, utc_now_iso, write_json
+from goal_compass_runtime.phased_goal import record_activity as record_phase_activity
 from goal_compass_runtime.convergence import (
     apply_observation as apply_convergence_observation,
     auto_start_segment,
@@ -82,6 +83,7 @@ NORTH_STAR = AGENT / "north_star_goal.json"
 VALIDATION_CATALOG = AGENT / "validation_catalog.json"
 TOOL_MODE = AGENT / "tool_mode.json"
 PROGRAM_PHASE = AGENT / "program_phase.json"
+PROGRAM_PHASE_LOCK = AGENT / "runtime" / "program_phase.lock"
 OBSERVER_STATE = AGENT / "runtime" / "observer_state.json"
 OBSERVER_LOCK = AGENT / "runtime" / "observer_state.lock"
 OBSERVER_EVENTS = AGENT / "runtime" / "observer_events.jsonl"
@@ -516,6 +518,35 @@ def record_procedure_evidence(event: dict[str, Any]) -> None:
         return
 
 
+def record_program_phase_activity(event: dict[str, Any], paths: list[str], kind: str) -> None:
+    """Record first phase action/evidence on the lightweight no-ticket path."""
+    if event_name(event) != "PostToolUse":
+        return
+    if kind == "write":
+        product_paths = [
+            path for path in paths
+            if not (
+                path == ".agent" or path.startswith(".agent/")
+                or path == ".codex" or path.startswith(".codex/")
+            )
+        ]
+        if not product_paths:
+            return
+    try:
+        with exclusive_file_lock(PROGRAM_PHASE_LOCK, timeout=0.2, stale_seconds=30.0):
+            phase = load_json(PROGRAM_PHASE, {})
+            updated, changed = record_phase_activity(
+                phase,
+                kind,
+                failed(event),
+                utc_now_iso(),
+            )
+            if changed:
+                write_json(PROGRAM_PHASE, updated)
+    except (OSError, RuntimeError, ValueError, json.JSONDecodeError):
+        return
+
+
 def goal_change_confirmation_context(
     north: dict[str, Any],
     convergence: dict[str, Any],
@@ -887,6 +918,7 @@ def main() -> int:
     if ticket.get("status") == "ACTIVE":
         return delegate_full(raw)
 
+    record_program_phase_activity(event, paths, kind)
     signals, metadata = observe(event)
     signals = [semantic_judgment(signal) for signal in signals]
     if goal_return_signal:

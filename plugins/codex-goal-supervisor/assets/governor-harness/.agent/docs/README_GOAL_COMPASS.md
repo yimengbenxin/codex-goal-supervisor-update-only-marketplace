@@ -4,6 +4,123 @@ Codex Goal Supervisor runs as a low-cost background observer after this project 
 
 The North Star and Goal-mode objective are different layers. The North Star is the concise durable direction. Goal mode contains a 2,000-3,500 character executable contract with modules, concrete actions, serial/parallel relationships, dependencies, outputs, goal contribution, and acceptance. Finalize that contract first, then pass the exact `goal_mode_objective` returned by `goal-set --require-detailed` to native `create_goal` and verify it with `get_goal` before implementation. Native `update_goal` changes status only; it cannot repair an objective created from an earlier summary. Super-complex work also uses a project-relative plan over 4,000 characters; Goal mode keeps a compressed contract and references the full plan rather than replacing its content with a path.
 
+For a project too large for one useful Goal, keep the confirmed North Star and
+use a shallow program outline plus one detailed current phase. Each phase is a
+2-24 hour independently useful outcome with distinct reuse research,
+dependencies, outputs, consumers, and validation-catalog IDs. Start it with
+`phase-set --outline-file <outline.json> --definition-file <phase.json>`, use
+the exact returned objective as the native Goal, and verify its hash. A failed
+`phase-complete` leaves the phase active; only a passing phase can be followed
+by `phase-advance --definition-file <next.json>`. The CLI reports required
+native Goal synchronization but cannot silently rewrite an active Codex Goal.
+
+## Structured Phased Goal Input
+
+`phase-set` consumes two JSON objects. The outline uses these canonical fields:
+
+```json
+{
+  "north_star_goal": "exact confirmed North Star",
+  "planning_research": {
+    "completed": true,
+    "queries": ["current reusable route"],
+    "sources": ["https://primary.example/source"],
+    "reuse_decision": "reuse or bounded-build decision"
+  },
+  "phases": [{
+    "phase_id": "P1",
+    "title": "independently useful outcome",
+    "outcome": "observable business result",
+    "dependencies": [],
+    "outputs": ["validated output"],
+    "consumers": ["named consumer"],
+    "contribution_to_goal": "why this advances the North Star",
+    "estimated_hours": 4
+  }],
+  "shared_contracts": ["cross-phase contract"],
+  "final_acceptance": ["program-level acceptance"]
+}
+```
+
+The phase file uses these canonical top-level fields:
+
+```json
+{
+  "phase_id": "P1",
+  "estimated_hours": 4,
+  "dependencies": [],
+  "validation_ids": ["catalog_validation_id"],
+  "goal_mode_objective": "authored 2,000-3,500 character current-phase contract",
+  "planning_research": {
+    "completed": true,
+    "researched_at": "ISO-8601 timestamp",
+    "queries": ["phase-specific reusable route"],
+    "sources": ["https://primary.example/phase-source"],
+    "tool_sources_reviewed": 1,
+    "article_sources_reviewed": 1,
+    "refresh_interval_hours": 24,
+    "reusable_candidate_found": false,
+    "no_suitable_reuse_reason": "bounded reason"
+  },
+  "goal_definition": {
+    "precise_goal": "current phase result",
+    "problem_statement": "current gap",
+    "current_state": "verified starting state",
+    "desired_state": "verified target state",
+    "stakeholders": ["consumer"],
+    "source_requirements": ["confirmed requirement"],
+    "first_principles": [{
+      "principle": "principle",
+      "rationale": "reason",
+      "implications": ["implementation consequence"]
+    }],
+    "process": {
+      "entry_conditions": ["entry evidence"],
+      "nodes": [{
+        "node_id": "N1",
+        "name": "module",
+        "objective": "module result",
+        "execution_mode": "SERIAL",
+        "inputs": ["input"],
+        "actions": ["action"],
+        "outputs": ["output"],
+        "exit_criteria": ["machine check"],
+        "dependencies": [],
+        "contribution_to_goal": "phase contribution",
+        "timebox_hours": 2,
+        "reminder_interval_hours": 0
+      }],
+      "completion_conditions": ["phase acceptance passes"]
+    },
+    "deliverables": [{
+      "name": "deliverable",
+      "description": "what is delivered",
+      "format": "file or service",
+      "consumer": "named consumer",
+      "acceptance": ["acceptance evidence"]
+    }],
+    "final_acceptance": [{
+      "criterion": "business criterion",
+      "evidence": "evidence location",
+      "validation_method": "catalog command"
+    }],
+    "constraints": ["constraint"],
+    "non_goals": ["non-goal"]
+  }
+}
+```
+
+Use at least two first principles and two process nodes. Supply an authored
+2,000-3,500 character `goal_mode_objective` when the complete structured
+definition would render beyond the native Goal limit. The plugin validates the
+complete definition separately and never truncates it. A long objective cannot
+compensate for missing structured fields. `phase-set` does not require a prior
+detailed `goal-set`; it validates this file, stores the phase projection, and
+returns the exact native Goal objective. Compatibility aliases such as
+`detailed_goal_definition`, `validation_catalog_ids`, `id`, `timebox_hours`,
+and `depends_on` are normalized, but new definitions should use the canonical
+shape above. Contract errors point back to this section.
+
 Each implementation action must have verification proportional to its risk. Use focused evidence for local changes instead of repeatedly running the full suite. Before claiming the entire North Star complete, run `convergence --certify-goal --final-validation-id <catalog-id>` with project-level end-to-end regression ids. Missing or failed regression cannot certify completion; only `CERTIFIED_COMPLETE` can.
 
 Background behavior remains quiet: product writes create bounded verification debt, successful observed validation clears it, and only an explicit completion claim at `Stop` exposes an open debt. A validation start without a `PostToolUse` success remains unverified. Goal Compass state under `.agent/**` and `.codex/**` is excluded from this debt.

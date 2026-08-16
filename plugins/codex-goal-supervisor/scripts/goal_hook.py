@@ -108,6 +108,8 @@ def is_plugin_template_root(path: Path) -> bool:
 
 def nearest_root(path: Path) -> Path | None:
     candidate = path if path.is_dir() else path.parent
+    if is_plugin_template_root(candidate):
+        return None
     for parent in (candidate, *candidate.parents):
         if is_compass_root(parent) and not is_plugin_template_root(parent):
             return parent

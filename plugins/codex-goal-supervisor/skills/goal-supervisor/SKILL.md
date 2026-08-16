@@ -31,7 +31,7 @@ still owns the work and final judgment.
 - A successful `goal-set --require-detailed` starts or reuses the loopback roadmap dashboard and returns `roadmap.url`. When continuing an already confirmed detailed Goal in a new task, run `roadmap` once to recover that URL. When the Codex in-app Browser capability is available, open the URL once so the user can watch the current route node; the page refreshes itself. A dashboard startup failure must be reported compactly but cannot block valid product work because North Star and convergence JSON remain authoritative.
 - During a long-running confirmed Goal, do not let the North Star become stale when the user clearly introduces a different durable product direction. A temporary request, question, implementation detail, sequencing change, or subgoal already contained by the current North Star stays silent. For a non-explicit direction change, ask only after the sparse Judge confirms at high confidence that it is durable and outside both the North Star and detailed Goal. Ask once per Goal generation across session changes or compaction, never auto-rewrite, and keep execution available. If the user confirms, rebuild the concise North Star and detailed Goal-mode contract together with `goal-set --replace-existing --require-detailed`; never replace only the one-line North Star.
 - Plugin auto-update is a separate device-level capability. It must never activate a project, alter a North Star, or run from project hooks. When the user explicitly asks to enable or repair automatic updates, run `scripts/configure_plugin_auto_update.py`; otherwise leave device scheduling unchanged.
-- A maintainer-created local version is not complete until `scripts/publish_verified_release.py` reports `PUBLISHED_AND_VERIFIED`. The command must run only after the release commit is clean; it verifies source and extracted ZIPs, publishes the canonical repository plus the full and update-only marketplaces, uploads all three edition ZIPs and their SHA-256 manifest, and reads the remote channels back. Never stream uncommitted file saves to clients.
+- A maintainer-created local version is not complete until its exact clean commit has first passed the real Luna Max task named `插件专用测试线程`, including exact native/detailed Goal equality and independent product acceptance, and only then `scripts/publish_verified_release.py` reports `PUBLISHED_AND_VERIFIED`. The publisher refuses to start without that commit-bound black-box evidence, then verifies source and extracted ZIPs before any network write. Never publish first and validate afterward, and never stream uncommitted file saves to clients.
 
 ## Two Layers
 
@@ -173,6 +173,14 @@ does not inject historical summaries into the conversation.
 - A recognized local-service launch becomes a project-local procedure after
   its first observed success. Its generated runner owns start, status, stop,
   PID, and log handling.
+- Project hooks are loaded when a Codex task starts. If Goal Supervisor is
+  explicitly installed or activated in a different project during an already
+  running task, first run the service and its project acceptance normally. If
+  `procedure` is still empty, register only that verified local-service launch
+  with `procedure --remember-verified-service ... --evidence ...`. Do this
+  automatically as execution bookkeeping; do not ask the user to type it. The
+  fallback rejects non-service, composed, sensitive, reading, and unevidenced
+  commands, and it must not be used to turn a planned command into evidence.
 - Other deterministic command sequences become reusable only after the same
   sequence succeeds in two independent tasks. One-off exploration remains a
   candidate and creates no executable Skill.
@@ -189,6 +197,9 @@ does not inject historical summaries into the conversation.
 
 ```bash
 python3 .agent/goal_compass.py procedure
+python3 .agent/goal_compass.py procedure \
+  --remember-verified-service "python3 src/server.py --port 8765" \
+  --evidence audit/service-smoke.json
 python3 .agent/goal_compass.py procedure --id service-xxxxxxxxxxxx
 python3 .agent/procedures/service-xxxxxxxxxxxx/scripts/run.py start
 python3 .agent/procedures/service-xxxxxxxxxxxx/scripts/run.py status
@@ -285,6 +296,46 @@ When the user explicitly asks to create a new North Star, keep three artifacts s
 1. **North Star:** the user's concise, durable project direction, normally one sentence. Preserve it verbatim after confirmation.
 2. **Goal-mode objective:** a 2,000-3,500 character executable contract. It must remain actual content in the Codex Goal UI, not a slogan or a path-only placeholder.
 3. **Super-complex project plan:** when the full plan exceeds Goal-mode capacity, write a project-relative Markdown/README plan longer than 4,000 characters. Goal mode still contains the 2,000-3,500 character compressed contract and references that plan. Never truncate the full plan to manufacture the compressed contract.
+
+For a super-complex project that cannot converge inside one useful Goal, use a
+structured phased program instead of one oversized permanent Goal:
+
+1. Research current reusable tools and proven routes, then write one shallow
+   program outline with a small set of business phases, shared contracts,
+   dependencies, outputs, consumers, project contribution, and final
+   acceptance. Do not fully design every future phase.
+2. Before each phase starts, repeat current online reuse research against that
+   phase and the remaining project work. The phase research must be distinct
+   from the outline research. Integrate and validate an accepted reusable tool;
+   do not merely mention it.
+3. Detail only the current phase. Its executable native Goal must represent one
+   independently useful 2-24 hour outcome and remain 2,000-3,500 characters.
+   Work below two hours stays an action; work above 24 hours splits at a
+   coherent business or integration boundary.
+4. Run `phase-set --outline-file <outline.json> --definition-file <phase.json>`.
+   Create the native Goal from the exact returned `goal_mode_objective`, then
+   verify its length and SHA-256 against `native_goal_sync` before product work.
+   The canonical phase JSON has top-level `phase_id`, `estimated_hours`,
+   `dependencies`, `validation_ids`, `planning_research`, one authored
+   2,000-3,500 character `goal_mode_objective`, and one complete
+   `goal_definition` object. The authored objective is the compressed native
+   Goal projection when the complete structured definition would render beyond
+   the Goal UI limit; never truncate the full definition. `goal_definition` is not a quality marker or an
+   objective string: it contains the same detailed fields accepted by
+   `goal-set --definition-file`, including `first_principles`, `process.nodes`,
+   structured `deliverables`, structured `final_acceptance`, constraints, and
+   non-goals. Do not run an extra detailed `goal-set` before `phase-set`;
+   `phase-set` validates the full definition and projects the authored objective itself. The installed
+   canonical shape is documented under `Structured Phased Goal Input` in
+   `.agent/docs/README_GOAL_COMPASS.md`.
+5. Run `phase-complete` to execute the phase validation IDs. A failed phase
+   stays active. Only after it passes may `phase-advance --definition-file
+   <next.json>` project a dependency-ready next phase. Complete the old native
+   Goal before creating the new one; never claim the CLI silently rewrote it.
+
+The concise confirmed North Star remains stable across phases. Phase timing and
+validation telemetry remain local by default and inform future granularity;
+estimated hours are planning evidence, not a reason to fail valid product work.
 
 The Goal-mode contract must state:
 

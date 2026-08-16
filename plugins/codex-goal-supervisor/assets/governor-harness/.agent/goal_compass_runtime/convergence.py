@@ -9,6 +9,7 @@ import copy
 import datetime as dt
 import hashlib
 import json
+import re
 from typing import Any
 
 
@@ -44,6 +45,7 @@ def empty_state() -> dict[str, Any]:
                 "current_state": None,
                 "desired_state": None,
                 "modules": [],
+                "completed_program_phases": [],
                 "module_count_total": 0,
                 "projection_truncated": False,
                 "deliverables": [],
@@ -142,6 +144,51 @@ def _bounded_actions(values: Any) -> list[dict[str, Any]]:
     return actions
 
 
+def _dependency_node_id(value: Any, node_ids: list[str]) -> str:
+    """Resolve an exact or explicitly prefixed dependency to one node ID.
+
+    Older detailed Goals sometimes described a dependency as ``N1 output`` or
+    ``DOMAIN 的领域结果`` even though the runtime requires node identities.
+    Accept only a unique node ID at the beginning of the text; unrelated prose
+    remains unresolved and therefore continues to block execution.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    exact = [node_id for node_id in node_ids if text.casefold() == node_id.casefold()]
+    if len(exact) == 1:
+        return exact[0]
+    prefixed = [
+        node_id
+        for node_id in node_ids
+        if re.match(
+            rf"^{re.escape(node_id)}(?:\s|[:：/\\—-]|的|$)",
+            text,
+            flags=re.IGNORECASE,
+        )
+    ]
+    return prefixed[0] if len(prefixed) == 1 else text
+
+
+def _module_dependencies(state: dict[str, Any], module: dict[str, Any]) -> list[str]:
+    stack = state.get("goal_stack") if isinstance(state.get("goal_stack"), dict) else {}
+    contract = stack.get("goal_contract") if isinstance(stack.get("goal_contract"), dict) else {}
+    modules = [row for row in contract.get("modules", []) if isinstance(row, dict)]
+    node_ids = [str(row.get("node_id") or "").strip() for row in modules]
+    node_ids = [value for value in node_ids if value]
+    completed_program_phases = {
+        str(value).strip().casefold()
+        for value in contract.get("completed_program_phases", [])
+        if str(value).strip()
+    }
+    return [
+        resolved
+        for value in _strings(module.get("dependencies"))
+        if (resolved := _dependency_node_id(value, node_ids))
+        and resolved.casefold() not in completed_program_phases
+    ]
+
+
 def goal_contract_projection(north_star: dict[str, Any]) -> dict[str, Any]:
     """Project the detailed Goal contract without copying the long Goal prose."""
     definition = north_star.get("goal_definition") if isinstance(north_star.get("goal_definition"), dict) else {}
@@ -151,7 +198,8 @@ def goal_contract_projection(north_star: dict[str, Any]) -> dict[str, Any]:
     dependent_consumers: dict[str, list[str]] = {node_id: [] for node_id in node_ids}
     for index, node in enumerate(nodes):
         consumer_id = node_ids[index]
-        for dependency in _bounded_strings(node.get("dependencies")):
+        for value in _bounded_strings(node.get("dependencies")):
+            dependency = _dependency_node_id(value, node_ids)
             if dependency in dependent_consumers and consumer_id not in dependent_consumers[dependency]:
                 dependent_consumers[dependency].append(consumer_id)
     modules = []
@@ -165,7 +213,10 @@ def goal_contract_projection(north_star: dict[str, Any]) -> dict[str, Any]:
             "node_id": node_id,
             "name": _bounded_text(node.get("name")),
             "objective": _bounded_text(node.get("objective")),
-            "dependencies": _bounded_strings(node.get("dependencies")),
+            "dependencies": [
+                _dependency_node_id(value, node_ids)
+                for value in _bounded_strings(node.get("dependencies"))
+            ],
             "inputs": _bounded_strings(node.get("inputs")),
             "actions": _bounded_actions(node.get("actions")),
             "outputs": _bounded_strings(node.get("outputs")),
@@ -298,7 +349,7 @@ def _independent_goal_paths(state: dict[str, Any], lower_message: str) -> list[d
             continue
         if _module_matches_message(module, lower_message):
             continue
-        dependencies = _strings(module.get("dependencies"))
+        dependencies = _module_dependencies(state, module)
         if not all(value in completed for value in dependencies):
             continue
         candidates.append({
@@ -522,13 +573,19 @@ def build_goal_stack(
         elif _acceptance_criteria({}, active_ticket):
             expectation = "machine acceptance evidence"
     stage = str(active_phase.get("goal") or active_ticket.get("task_goal") or "").strip() or None
+    contract = goal_contract_projection(north_star)
+    contract["completed_program_phases"] = [
+        str(row.get("phase_id")).strip()
+        for row in phase.get("completed_phases", [])
+        if isinstance(row, dict) and str(row.get("phase_id") or "").strip()
+    ]
     return {
         "l0_final_goal": str(north_star.get("goal") or "").strip() or None,
         "l1_success_criteria": _acceptance_criteria(north_star, active_ticket),
         "l2_current_stage": stage,
         "l3_current_action": action,
         "l3_expected_evidence": expectation or None,
-        "goal_contract": goal_contract_projection(north_star),
+        "goal_contract": contract,
     }
 
 
@@ -618,7 +675,7 @@ def start_segment(
         for item in segments.get("completed", [])
         if isinstance(item, dict)
     }
-    missing = [value for value in _strings(module.get("dependencies")) if value not in completed]
+    missing = [value for value in _module_dependencies(row, module) if value not in completed]
     if missing:
         raise ValueError("segment dependencies are not complete: " + ", ".join(missing))
     try:
@@ -677,7 +734,7 @@ def auto_start_segment(
         if str(item.get("node_id") or "").strip()
         and str(item.get("node_id") or "").strip() not in active
         and str(item.get("node_id") or "").strip() not in completed
-        and all(value in completed for value in _strings(item.get("dependencies")))
+        and all(value in completed for value in _module_dependencies(row, item))
     ]
     if not eligible:
         return row, None

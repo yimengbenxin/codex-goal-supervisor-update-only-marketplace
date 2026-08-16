@@ -161,7 +161,7 @@ def classify_prompt(prompt: str) -> str:
     normalized = " ".join(prompt.lower().split())
     if prompt.rstrip().endswith(("?", "？")):
         return QUESTION_ONLY
-    if any(marker in normalized for marker in _GOAL_REPLACEMENT_MARKERS):
+    if _explicit_goal_replacement(normalized):
         return GOAL_REPLACEMENT_REQUEST
     if any(marker in normalized for marker in _PERSISTENT_MARKERS):
         return PERSISTENT_CONSTRAINT
@@ -170,6 +170,17 @@ def classify_prompt(prompt: str) -> str:
     if any(marker in normalized for marker in _TEMPORARY_MARKERS):
         return TEMPORARY_BRANCH
     return UNSCOPED
+
+
+def _explicit_goal_replacement(normalized: str) -> bool:
+    if any(marker in normalized for marker in _GOAL_REPLACEMENT_MARKERS):
+        return True
+    goal_name = r"(?:北极星(?:指标)?|north\s+star|总目标)"
+    replacement = r"(?:改为|改成|替换为|调整为|转向|change(?:d)?\s+to|replace(?:d)?\s+with)"
+    return bool(
+        re.search(goal_name + r".{0,48}?" + replacement, normalized)
+        or re.search(r"(?:将|把).{0,48}?" + goal_name + r".{0,48}?" + replacement, normalized)
+    )
 
 
 def _long_running_goal(north_star: dict[str, Any], convergence: dict[str, Any]) -> bool:
@@ -229,12 +240,17 @@ def _obviously_contained(prompt: str, north_star: dict[str, Any], convergence: d
 
 def goal_change_response(prompt: str) -> str | None:
     normalized = " ".join(prompt.casefold().split())
-    if not normalized or len(normalized) > 80 or prompt.rstrip().endswith(("?", "？")):
+    if not normalized or prompt.rstrip().endswith(("?", "？")):
         return None
-    if any(marker in normalized for marker in _GOAL_CHANGE_CONFIRM_MARKERS):
-        return "CONFIRMED"
     if any(marker in normalized for marker in _GOAL_CHANGE_DISMISS_MARKERS):
         return "DISMISSED"
+    explicit_confirmation = bool(re.match(r"^(?:我)?确认(?:\s|[:：,，])", normalized))
+    if any(marker in normalized for marker in _GOAL_CHANGE_CONFIRM_MARKERS) or (
+        explicit_confirmation and _explicit_goal_replacement(normalized)
+    ):
+        return "CONFIRMED"
+    if len(normalized) > 80:
+        return None
     return None
 
 
