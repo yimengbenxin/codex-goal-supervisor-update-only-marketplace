@@ -105,11 +105,13 @@ python3 .agent/goal_compass.py phase-advance \
   --reason "Phase 01 validated"
 ```
 
-After `phase-set` or `phase-advance`, the execution Agent must create the native
-Codex Goal from the exact returned `goal_mode_objective`, then compare the
-native objective length and SHA-256 with `native_goal_sync`. The CLI cannot
-silently rewrite an already-active native Goal. The current native Goal must be
-completed before the next phase objective is created.
+Inside a Codex task, `phase-set` and `phase-advance` install the exact returned
+`goal_mode_objective` with official app-server `thread/goal/set`, then read it
+back with `thread/goal/get` and compare objective length and SHA-256 before
+committing local phase state. `phase-advance` still requires the previous phase
+to pass validation. An explicit durable user-direction replacement may
+supersede an unfinished Goal without claiming it was achieved; that transition
+is recorded separately from normal validated phase completion.
 
 `phase-complete` runs the phase's validation-catalog IDs. A failure leaves the
 phase `ACTIVE`; only a passing phase can become a dependency for the next

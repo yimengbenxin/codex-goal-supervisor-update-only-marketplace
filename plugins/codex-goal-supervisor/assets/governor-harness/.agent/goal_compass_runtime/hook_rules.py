@@ -208,7 +208,12 @@ def _nonzero_exit_code(value: Any) -> bool:
 
 
 def tool_failed(event: dict[str, Any]) -> bool:
-    response = event.get("tool_response") or event.get("toolResponse") or event.get("output") or {}
+    response = (
+        event.get("tool_response") or event.get("toolResponse")
+        or event.get("tool_output") or event.get("toolOutput")
+        or event.get("tool_result") or event.get("toolResult")
+        or event.get("output") or event.get("result") or {}
+    )
     mappings = [response] if isinstance(response, dict) else []
     mappings.append(event)
     for mapping in mappings:

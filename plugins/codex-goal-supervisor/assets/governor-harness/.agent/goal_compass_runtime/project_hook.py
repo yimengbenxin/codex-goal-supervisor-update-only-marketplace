@@ -37,6 +37,7 @@ from goal_compass_runtime.observer import (
     persist_recent_events,
     queue_pending_event,
 )
+from goal_compass_runtime.route_incidents import build_context as build_route_context
 from goal_compass_runtime.state_store import exclusive_file_lock, load_json, utc_now_iso, write_json
 from goal_compass_runtime.phased_goal import record_activity as record_phase_activity
 from goal_compass_runtime.convergence import (
@@ -137,7 +138,18 @@ def match_path(path: str, patterns: list[str] | tuple[str, ...]) -> bool:
 
 
 def event_name(event: dict[str, Any]) -> str:
-    return str(event.get("hook_event_name") or event.get("hookEventName") or "")
+    explicit = str(event.get("hook_event_name") or event.get("hookEventName") or "")
+    if explicit:
+        return explicit
+    response_fields = (
+        "tool_response", "toolResponse", "tool_output", "toolOutput",
+        "tool_result", "toolResult", "output", "result", "error",
+    )
+    if any(key in event for key in response_fields):
+        return "PostToolUse"
+    if any(key in event for key in ("tool_input", "toolInput", "input")):
+        return "PreToolUse"
+    return ""
 
 
 def tool_input(event: dict[str, Any]) -> dict[str, Any]:
@@ -653,6 +665,23 @@ def observe(event: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]
         failed=failed(event) if phase == "PostToolUse" else False,
         observed_at=utc_now_iso(),
     )
+    north = load_json(NORTH_STAR, {})
+    convergence_before = refresh_convergence_state(
+        load_json(CONVERGENCE_STATE, empty_convergence_state()),
+        north_star=north,
+        phase=load_json(PROGRAM_PHASE, {}),
+        ticket=load_json(CURRENT, {}),
+        updated_at=str(row.get("ts") or utc_now_iso()),
+    )
+    route = build_route_context(
+        north_star=north,
+        convergence=convergence_before,
+        event=event,
+        paths=paths,
+        failed=bool(row.get("failed")),
+    )
+    if route:
+        row["route_context"] = route
     if phase == "PreToolUse" and paths:
         context = deviation_context(event, paths)
         if context:
@@ -700,9 +729,29 @@ def observe(event: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]
 
 def semantic_judgment(signal: dict[str, Any]) -> dict[str, Any]:
     """Require sparse model confirmation before a semantic targeted rail."""
-    if os.environ.get("GOAL_SUPERVISOR_DISABLE_LLM_JUDGE") == "1":
+    signal_name = str(signal.get("signal") or "")
+    route_signal = signal_name in {"ROUTE_REASSESSMENT_REQUIRED", "ROUTE_STAGNATION"}
+    supported = {
+        "NORTH_STAR_DEVIATION", "GOAL_CONTRACT_DEVIATION",
+        "ROUTE_REASSESSMENT_REQUIRED", "ROUTE_STAGNATION",
+    }
+    if signal_name not in supported:
         return signal
-    if signal.get("signal") not in {"NORTH_STAR_DEVIATION", "GOAL_CONTRACT_DEVIATION"}:
+    if route_signal and not (
+        signal_name == "ROUTE_STAGNATION"
+        and str(signal.get("status") or "") == "RAIL_ENFORCED"
+        and bool(signal.get("deny"))
+    ):
+        # Warnings stay script-only. The sparse Judge is reserved for the
+        # exact repeated action that is about to receive a targeted rail.
+        return signal
+    if os.environ.get("GOAL_SUPERVISOR_DISABLE_LLM_JUDGE") == "1":
+        if route_signal and signal.get("deny"):
+            reviewed = dict(signal)
+            reviewed["deny"] = False
+            reviewed["intervention"] = "STRONG_WARNING"
+            reviewed["reason"] = str(reviewed.get("reason") or "") + " Semantic route review is unavailable, so execution remains open."
+            return reviewed
         return signal
     status = str(signal.get("status") or "")
     strike = int(signal.get("strike_count", 0) or 0)
@@ -714,11 +763,15 @@ def semantic_judgment(signal: dict[str, Any]) -> dict[str, Any]:
         phase=load_json(PROGRAM_PHASE, {}),
         ticket=load_json(CURRENT, {}),
         updated_at=utc_now_iso(),
-        current_action="Write under " + ", ".join(signal.get("affected_path_roots", [])[:6]),
+        current_action=(
+            str(signal.get("route_label") or "Reassess the current technical route")
+            if route_signal else
+            "Write under " + ", ".join(signal.get("affected_path_roots", [])[:6])
+        ),
     )
     stack = state.get("goal_stack") if isinstance(state.get("goal_stack"), dict) else {}
     packet = {
-        "trigger": "pending_targeted_rail",
+        "trigger": "technical_route_reassessment" if route_signal else "pending_targeted_rail",
         "north_star_goal": stack.get("l0_final_goal"),
         "goal_contract": stack.get("goal_contract"),
         "alignment_layer": signal.get("alignment_layer"),
@@ -733,9 +786,18 @@ def semantic_judgment(signal: dict[str, Any]) -> dict[str, Any]:
             {"kind": row.get("kind"), "summary": row.get("summary")}
             for row in state.get("evidence", [])[-12:] if isinstance(row, dict)
         ],
-        "policy_boundary": signal.get("policy"),
+        "policy_boundary": (
+            "Every technical route must satisfy the detailed Goal source requirements, first principles, and final acceptance. Repeated blocked routes without new evidence must be replaced or disproved."
+            if route_signal else signal.get("policy")
+        ),
         "affected_paths": list(signal.get("affected_path_roots") or [])[:16],
+        "appeal": (
+            f"Route={signal.get('route_label')}; cause_family={signal.get('cause_family')}; repeated_failures={strike}."
+            if route_signal else None
+        ),
         "consequence": (
+            "A false rail delays a viable route; a missed rail repeats a blocked or first-principle-incompatible technical route."
+            if route_signal else
             "A false rail delays aligned work; a missed rail permits repeated explicit Goal-contract deviation."
             if signal.get("signal") == "GOAL_CONTRACT_DEVIATION"
             else "A false rail delays aligned work; a missed rail permits repeated North Star deviation."
@@ -764,7 +826,9 @@ def semantic_judgment(signal: dict[str, Any]) -> dict[str, Any]:
     if status == "RAIL_ENFORCED" and not confirmed:
         reviewed["deny"] = False
         reviewed["intervention"] = "STRONG_WARNING"
-        reviewed["recommended_action"] = result.get("recommended_action") or "return_to_alignment_target_or_add_evidence"
+        reviewed["recommended_action"] = result.get("recommended_action") or (
+            "research_compare_and_switch_route" if route_signal else "return_to_alignment_target_or_add_evidence"
+        )
         reviewed["reason"] = (
             str(reviewed.get("reason") or "")
             + " LLM Judge did not confirm a targeted rail at high confidence; execution remains available. "

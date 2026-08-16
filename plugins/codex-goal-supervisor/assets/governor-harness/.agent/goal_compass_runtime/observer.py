@@ -18,6 +18,10 @@ from goal_compass_runtime.deviation_incidents import (
     compact_summary as compact_deviation_summary,
     process_write as process_deviation_write,
 )
+from goal_compass_runtime.route_incidents import (
+    compact_summary as compact_route_summary,
+    process_observation as process_route_observation,
+)
 
 
 POLICY_VERSION = "2.0"
@@ -60,6 +64,7 @@ def empty_state() -> dict[str, Any]:
         "fallback_events_recovered": 0,
         "fallback_overflow_detected": False,
         "deviation_incidents": {},
+        "route_incidents": {},
         "verification_debt": empty_verification_debt(),
         "last_event_at": None,
     }
@@ -247,6 +252,8 @@ def apply_observation(
         failed=bool(event.get("failed")),
         observed_at=str(event.get("ts") or ""),
     )
+    row, route_signals = process_route_observation(row, event)
+    signals = [*route_signals, *signals]
     deviation = event.get("deviation_context") if isinstance(event.get("deviation_context"), dict) else None
     if deviation and event.get("phase") == "PreToolUse":
         row, deviation_signals = process_deviation_write(
@@ -393,6 +400,7 @@ def compact_summary(state: dict[str, Any] | None) -> dict[str, Any]:
         "fallback_overflow_detected": bool(row.get("fallback_overflow_detected")),
         "last_event_at": row.get("last_event_at"),
         "deviations": compact_deviation_summary(row),
+        "route_incidents": compact_route_summary(row),
         "verification_debt": {
             "pending": bool((row.get("verification_debt") or {}).get("pending")),
             "write_path_count": len((row.get("verification_debt") or {}).get("write_paths") or []),

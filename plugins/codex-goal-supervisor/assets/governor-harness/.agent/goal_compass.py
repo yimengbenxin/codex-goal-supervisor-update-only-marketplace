@@ -59,6 +59,7 @@ from goal_compass_runtime.observer import (
     persist_recent_events as persist_observer_events,
     queue_pending_event as queue_pending_observer_event,
 )
+from goal_compass_runtime.route_incidents import build_context as build_route_context
 from goal_compass_runtime.feedback import (
     ensure_config as ensure_feedback_config,
     record as record_feedback,
@@ -126,6 +127,11 @@ from goal_compass_runtime.phased_goal import (
     validate_outline as validate_program_outline,
     validate_phase as validate_structured_phase,
 )
+from goal_compass_runtime.native_goal_bridge import (
+    NativeGoalBridgeError,
+    availability as native_goal_bridge_availability,
+    replace_goal as replace_native_goal,
+)
 
 
 AGENT = Path(".agent")
@@ -134,6 +140,7 @@ CURRENT_TICKET = AGENT / "current_ticket.json"
 LAST_TICKET = AGENT / "last_ticket.json"
 NORTH_STAR = AGENT / "north_star_goal.json"
 PROGRAM_PHASE = AGENT / "program_phase.json"
+GOAL_REPLACEMENT_HISTORY = AGENT / "goal_replacement_history.jsonl"
 GOAL_REPORT_JSON = AGENT / "goal_alignment_report.json"
 GOAL_REPORT_MD = AGENT / "goal_alignment_report.md"
 BACKLOG = AGENT / "backlog.jsonl"
@@ -7394,7 +7401,45 @@ def cmd_goal_set(args: argparse.Namespace) -> int:
         return 2
     source = "user_explicit_replacement" if existing.get("confirmed") else "user_confirmed"
     data = structured_north_star(args.text, source, definition)
+    objective = str(data.get("goal_mode_objective") or "")
+    replacement_reason = str(args.replacement_reason or "").strip()
+    if existing.get("confirmed") and not replacement_reason:
+        replacement_reason = "user_confirmed_durable_goal_change"
+    native_sync = synchronize_native_goal(
+        objective,
+        objective_source_field="goal_mode_objective",
+        transition=("SUPERSEDED_BY_USER_DIRECTION_CHANGE" if existing.get("confirmed") else "INITIAL_GOAL_ACTIVATION"),
+        reason=replacement_reason or "initial_goal_activation",
+        objective_achieved=False if existing.get("confirmed") else None,
+    )
+    if native_sync.get("status") == "NATIVE_GOAL_SYNC_FAILED":
+        print(json.dumps({
+            "ok": False,
+            "status": "NATIVE_GOAL_SYNC_FAILED",
+            "error": native_sync.get("error"),
+            "native_goal_sync": native_sync,
+            "required_action": "retry_native_goal_sync_without_changing_project_state",
+        }, ensure_ascii=False, indent=2))
+        return 1
+    native_replaced = native_sync.get("operation") == "REPLACED"
+    replacement_happened = bool(existing.get("confirmed")) or native_replaced
+    if native_replaced and not existing.get("confirmed"):
+        replacement_reason = replacement_reason or "user_confirmed_native_goal_replacement"
+        native_sync.update({
+            "transition": "SUPERSEDED_BY_USER_DIRECTION_CHANGE",
+            "reason": replacement_reason,
+            "objective_achieved": False,
+        })
+    data["native_goal_sync"] = compact_native_goal_sync(native_sync)
     write_json(NORTH_STAR, data)
+    if replacement_happened:
+        record_goal_replacement(
+            native_sync,
+            transition="SUPERSEDED_BY_USER_DIRECTION_CHANGE",
+            reason=replacement_reason,
+            objective_achieved=False,
+            previous_project_goal=existing,
+        )
     refresh_convergence_projection()
     roadmap = (
         ensure_roadmap_server(Path.cwd())
@@ -7421,16 +7466,7 @@ def cmd_goal_set(args: argparse.Namespace) -> int:
         "goal_definition": goal_definition_summary(data),
         "goal_mode_objective": data.get("goal_mode_objective"),
         "goal_mode_objective_chars": len(str(data.get("goal_mode_objective") or "")),
-        "native_goal_sync": {
-            "status": "CREATE_REQUIRED",
-            "objective_source_field": "goal_mode_objective",
-            "objective_chars": data.get("native_goal_contract", {}).get("objective_chars"),
-            "objective_sha256": data.get("native_goal_contract", {}).get("objective_sha256"),
-            "required_action": (
-                "Call the Codex native create_goal tool with the exact top-level goal_mode_objective, "
-                "then call get_goal and verify exact objective equality before implementation."
-            ),
-        },
+        "native_goal_sync": native_sync,
         "execution_plan_ref": definition.get("execution_plan_ref"),
         "roadmap": roadmap,
         "reuse": reuse_compact_status(onboarding_probe, AGENT),
@@ -7456,17 +7492,156 @@ def phase_contract_file(value: str | None) -> tuple[dict[str, Any], str | None]:
     return payload if isinstance(payload, dict) else {}, None if isinstance(payload, dict) else f"contract file must contain a JSON object: {raw}"
 
 
-def phase_native_goal_sync(objective: str, status: str = "CREATE_REQUIRED") -> dict[str, Any]:
+def compact_native_goal_sync(result: dict[str, Any]) -> dict[str, Any]:
     return {
-        "status": status,
-        "objective_source_field": "program_phase.current_phase.goal_mode_objective",
-        "objective_chars": len(objective),
-        "objective_sha256": sha256_bytes(objective.encode("utf-8")),
-        "required_action": "Replace the Codex native Goal with this exact current-phase objective before phase implementation.",
+        key: result.get(key)
+        for key in (
+            "status", "operation", "objective_source_field", "objective_chars",
+            "objective_sha256", "verified", "transition", "reason", "required_action",
+        )
+        if result.get(key) is not None
     }
 
 
-def sync_current_phase_goal(definition: dict[str, Any], objective: str, phase_id: str) -> dict[str, Any]:
+def synchronize_native_goal(
+    objective: str,
+    *,
+    objective_source_field: str,
+    transition: str,
+    reason: str,
+    objective_achieved: bool | None,
+) -> dict[str, Any]:
+    base = {
+        "objective_source_field": objective_source_field,
+        "objective_chars": len(objective),
+        "objective_sha256": sha256_bytes(objective.encode("utf-8")),
+        "transition": transition,
+        "reason": reason,
+        "objective_achieved": objective_achieved,
+    }
+    state = native_goal_bridge_availability()
+    if not state.get("available"):
+        if state.get("thread_id") and state.get("reason") == "codex_executable_unavailable":
+            return {
+                **base,
+                "status": "NATIVE_GOAL_SYNC_FAILED",
+                "verified": False,
+                "error": "Codex app-server executable is unavailable in the active Codex task",
+                "required_action": "repair_codex_app_server_access_without_changing_project_state",
+            }
+        return {
+            **base,
+            "status": "CREATE_REQUIRED",
+            "verified": False,
+            "bridge_reason": state.get("reason"),
+            "required_action": (
+                "Run this command inside the target Codex task so Goal Supervisor can call "
+                "thread/goal/set and verify it with thread/goal/get."
+            ),
+        }
+    try:
+        synced = replace_native_goal(objective, thread_id=str(state.get("thread_id") or ""))
+    except NativeGoalBridgeError as exc:
+        return {
+            **base,
+            "status": "NATIVE_GOAL_SYNC_FAILED",
+            "verified": False,
+            "error": str(exc),
+            "required_action": "retry_native_goal_sync",
+        }
+    previous = synced.get("previous") if isinstance(synced.get("previous"), dict) else None
+    return {
+        **base,
+        "status": "SYNCED",
+        "operation": synced.get("operation"),
+        "verified": True,
+        "thread_id_sha256": sha256_bytes(str(synced.get("thread_id") or "").encode("utf-8")),
+        "previous_goal": previous,
+        "current_goal": synced.get("current"),
+        "required_action": "continue_with_synced_native_goal",
+    }
+
+
+def record_goal_replacement(
+    native_sync: dict[str, Any],
+    *,
+    transition: str,
+    reason: str,
+    objective_achieved: bool,
+    previous_project_goal: dict[str, Any] | None = None,
+) -> None:
+    previous_native = native_sync.get("previous_goal") if isinstance(native_sync.get("previous_goal"), dict) else {}
+    previous_project = previous_project_goal if isinstance(previous_project_goal, dict) else {}
+    previous_objective = str(previous_native.get("objective") or previous_project.get("goal_mode_objective") or "")
+    previous_definition = (
+        previous_project.get("goal_definition")
+        if isinstance(previous_project.get("goal_definition"), dict)
+        else None
+    )
+    previous_acceptance = (
+        previous_definition.get("final_acceptance", [])
+        if isinstance(previous_definition, dict)
+        else []
+    )
+    native_snapshot = {
+        key: previous_native.get(key)
+        for key in (
+            "objective", "status", "tokenBudget", "tokensUsed", "timeUsedSeconds",
+            "createdAt", "updatedAt",
+        )
+        if previous_native.get(key) is not None
+    } or None
+    project_snapshot = ({
+        "goal": previous_project.get("goal"),
+        "goal_mode_objective": previous_project.get("goal_mode_objective"),
+        "goal_definition": previous_definition,
+        "native_goal_contract": previous_project.get("native_goal_contract"),
+    } if previous_project.get("confirmed") else None)
+    append_jsonl(GOAL_REPLACEMENT_HISTORY, {
+        "ts": now(),
+        "transition": transition,
+        "reason": reason,
+        "objective_achieved": objective_achieved,
+        "native_verified": bool(native_sync.get("verified")),
+        "native_operation": native_sync.get("operation"),
+        "thread_id_sha256": native_sync.get("thread_id_sha256"),
+        "previous_status": previous_native.get("status"),
+        "previous_objective_chars": len(previous_objective),
+        "previous_objective_sha256": sha256_bytes(previous_objective.encode("utf-8")) if previous_objective else None,
+        "previous_tokens_used": previous_native.get("tokensUsed"),
+        "previous_time_used_seconds": previous_native.get("timeUsedSeconds"),
+        "previous_acceptance": previous_acceptance,
+        "previous_native_snapshot": native_snapshot,
+        "previous_project_snapshot": project_snapshot,
+        "restore_available": bool(previous_objective),
+        "restore_requires_explicit_user_confirmation": True,
+        "new_objective_chars": native_sync.get("objective_chars"),
+        "new_objective_sha256": native_sync.get("objective_sha256"),
+    })
+
+
+def phase_native_goal_sync(
+    objective: str,
+    *,
+    transition: str,
+    reason: str,
+    objective_achieved: bool | None,
+) -> dict[str, Any]:
+    return synchronize_native_goal(
+        objective,
+        objective_source_field="program_phase.current_phase.goal_mode_objective",
+        transition=transition,
+        reason=reason,
+        objective_achieved=objective_achieved,
+    )
+
+
+def sync_current_phase_goal(
+    definition: dict[str, Any],
+    objective: str,
+    phase_id: str,
+    native_sync: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     data = load_json(NORTH_STAR, {})
     data["goal_definition"] = definition
     data["goal_mode_objective"] = objective
@@ -7476,6 +7651,8 @@ def sync_current_phase_goal(definition: dict[str, Any], objective: str, phase_id
         "objective_chars": len(objective),
         "objective_sha256": sha256_bytes(objective.encode("utf-8")),
     }
+    if isinstance(native_sync, dict):
+        data["native_goal_sync"] = compact_native_goal_sync(native_sync)
     write_json(NORTH_STAR, data)
     return data
 
@@ -7618,15 +7795,47 @@ def cmd_phase_set(args: argparse.Namespace) -> int:
             observed_at=observed_at,
         )
         payload["north_star_goal_sha256"] = sha256_bytes(goal.encode("utf-8"))
-        sync_current_phase_goal(phase["goal_definition"], phase["goal_mode_objective"], phase["phase_id"])
+        previous_project_goal = load_json(NORTH_STAR, {})
+        native_sync = phase_native_goal_sync(
+            phase["goal_mode_objective"],
+            transition="INITIAL_PROGRAM_PHASE_ACTIVATION",
+            reason="user_confirmed_program_phase",
+            objective_achieved=None,
+        )
+        if native_sync.get("status") == "NATIVE_GOAL_SYNC_FAILED":
+            print(json.dumps({
+                "ok": False,
+                "status": "NATIVE_GOAL_SYNC_FAILED",
+                "error": native_sync.get("error"),
+                "native_goal_sync": native_sync,
+                "required_action": "retry_phase_set_without_changing_project_state",
+            }, ensure_ascii=False, indent=2))
+            return 1
+        if native_sync.get("operation") == "REPLACED":
+            native_sync.update({
+                "transition": "SUPERSEDED_BY_PROGRAM_PHASE_ACTIVATION",
+                "objective_achieved": False,
+            })
+        sync_current_phase_goal(
+            phase["goal_definition"], phase["goal_mode_objective"], phase["phase_id"], native_sync,
+        )
+        payload["native_goal_sync"] = compact_native_goal_sync(native_sync)
         write_json(PROGRAM_PHASE, payload)
+        if native_sync.get("operation") == "REPLACED":
+            record_goal_replacement(
+                native_sync,
+                transition="SUPERSEDED_BY_PROGRAM_PHASE_ACTIVATION",
+                reason="user_confirmed_program_phase",
+                objective_achieved=False,
+                previous_project_goal=previous_project_goal,
+            )
         refresh_convergence_projection()
         roadmap = ensure_roadmap_server(Path.cwd())
         print(json.dumps({
             "ok": True,
             "program_phase": compact_program_phase(payload),
             "goal_mode_objective": phase["goal_mode_objective"],
-            "native_goal_sync": phase_native_goal_sync(phase["goal_mode_objective"]),
+            "native_goal_sync": native_sync,
             "roadmap": roadmap,
         }, ensure_ascii=False, indent=2))
         return 0
@@ -7745,8 +7954,34 @@ def cmd_phase_advance(args: argparse.Namespace) -> int:
             previous_phase_id=str(previous.get("phase_id") or "") or None,
         )
         payload["north_star_goal_sha256"] = previous.get("north_star_goal_sha256")
-        sync_current_phase_goal(phase["goal_definition"], phase["goal_mode_objective"], phase["phase_id"])
+        previous_project_goal = load_json(NORTH_STAR, {})
+        native_sync = phase_native_goal_sync(
+            phase["goal_mode_objective"],
+            transition="PHASE_ADVANCE_AFTER_VALIDATION",
+            reason=str(args.reason),
+            objective_achieved=True,
+        )
+        if native_sync.get("status") == "NATIVE_GOAL_SYNC_FAILED":
+            print(json.dumps({
+                "ok": False,
+                "status": "NATIVE_GOAL_SYNC_FAILED",
+                "error": native_sync.get("error"),
+                "native_goal_sync": native_sync,
+                "required_action": "retry_phase_advance_without_changing_project_state",
+            }, ensure_ascii=False, indent=2))
+            return 1
+        sync_current_phase_goal(
+            phase["goal_definition"], phase["goal_mode_objective"], phase["phase_id"], native_sync,
+        )
+        payload["native_goal_sync"] = compact_native_goal_sync(native_sync)
         write_json(PROGRAM_PHASE, payload)
+        record_goal_replacement(
+            native_sync,
+            transition="PHASE_ADVANCE_AFTER_VALIDATION",
+            reason=str(args.reason),
+            objective_achieved=True,
+            previous_project_goal=previous_project_goal,
+        )
         refresh_convergence_projection()
         roadmap = ensure_roadmap_server(Path.cwd())
         print(json.dumps({
@@ -7754,7 +7989,7 @@ def cmd_phase_advance(args: argparse.Namespace) -> int:
             "previous_phase": compact_program_phase(previous),
             "program_phase": compact_program_phase(payload),
             "goal_mode_objective": phase["goal_mode_objective"],
-            "native_goal_sync": phase_native_goal_sync(phase["goal_mode_objective"], "CREATE_REQUIRED_AFTER_PREVIOUS_COMPLETE"),
+            "native_goal_sync": native_sync,
             "roadmap": roadmap,
         }, ensure_ascii=False, indent=2))
         return 0
@@ -9713,6 +9948,9 @@ def cmd_status(args: argparse.Namespace) -> int:
             "count": backlog_count(),
         },
     }
+    native_goal_status = (north.get("native_goal_sync") or {}).get("status")
+    if native_goal_status not in {None, "CREATE_REQUIRED"}:
+        payload["north_star"]["native_goal_sync"] = native_goal_status
     phase_state = program_phase()
     if phase_state.get("status") != "UNSET":
         payload["program_phase"] = compact_program_phase(phase_state)
@@ -9740,6 +9978,7 @@ def cmd_status(args: argparse.Namespace) -> int:
                 "confirmed": bool(north.get("confirmed")),
                 "goal": north.get("goal"),
                 "definition": definition,
+                "native_goal_sync": north.get("native_goal_sync"),
                 "preservation_policy": "existing_goal_is_read_only_unless_user_explicitly_replaces_it",
             },
             "last_ticket": ({
@@ -10427,9 +10666,25 @@ def record_observer_event(event: dict[str, Any], phase: str) -> list[dict[str, A
         failed=failed,
         observed_at=observed_at,
     )
+    stored_north = load_json(NORTH_STAR, {})
+    convergence_before = refresh_convergence_state(
+        load_json(CONVERGENCE_STATE, empty_convergence_state()),
+        north_star=north_star(),
+        phase=program_phase(),
+        ticket=current_ticket(),
+        updated_at=observed_at,
+    )
+    route = build_route_context(
+        north_star=stored_north,
+        convergence=convergence_before,
+        event=event,
+        paths=paths,
+        failed=failed,
+    )
+    if route:
+        row["route_context"] = route
     if phase == "PreToolUse" and paths:
         north = north_star()
-        stored_north = load_json(NORTH_STAR, {})
         ticket = current_ticket()
         # north_star() exposes a compatibility union of North Star anti-goals
         # and Goal non-goals. The stored document retains their true sources.
@@ -10579,29 +10834,62 @@ def convergence_judge_packet(
 
 def review_semantic_signal(signal: dict[str, Any]) -> dict[str, Any]:
     """Confirm a semantic targeted rail with the sparse Judge before denial."""
-    if os.environ.get("GOAL_SUPERVISOR_DISABLE_LLM_JUDGE") == "1":
+    signal_name = str(signal.get("signal") or "")
+    route_signal = signal_name in {"ROUTE_REASSESSMENT_REQUIRED", "ROUTE_STAGNATION"}
+    supported = {
+        "NORTH_STAR_DEVIATION", "GOAL_CONTRACT_DEVIATION",
+        "ROUTE_REASSESSMENT_REQUIRED", "ROUTE_STAGNATION",
+    }
+    if signal_name not in supported:
         return signal
-    if signal.get("signal") not in {"NORTH_STAR_DEVIATION", "GOAL_CONTRACT_DEVIATION"}:
+    if route_signal and not (
+        signal_name == "ROUTE_STAGNATION"
+        and str(signal.get("status") or "") == "RAIL_ENFORCED"
+        and bool(signal.get("deny"))
+    ):
+        # Route reassessment is a cheap deterministic warning. Spend an LLM
+        # call only when the same action is about to be selectively denied.
+        return signal
+    if os.environ.get("GOAL_SUPERVISOR_DISABLE_LLM_JUDGE") == "1":
+        if route_signal and signal.get("deny"):
+            reviewed = dict(signal)
+            reviewed["deny"] = False
+            reviewed["intervention"] = "STRONG_WARNING"
+            reviewed["reason"] = str(reviewed.get("reason") or "") + " Semantic route review is unavailable, so execution remains open."
+            return reviewed
         return signal
     status = str(signal.get("status") or "")
     strike = int(signal.get("strike_count", 0) or 0)
     if status not in {"CORRECTION_REQUIRED", "RAIL_ENFORCED"} or strike < 2:
         return signal
     state = refresh_convergence_projection(
-        current_action="Write under " + ", ".join(signal.get("affected_path_roots", [])[:6]),
+        current_action=(
+            str(signal.get("route_label") or "Reassess the current technical route")
+            if route_signal else
+            "Write under " + ", ".join(signal.get("affected_path_roots", [])[:6])
+        ),
         persist=False,
     )
     packet = convergence_judge_packet(
         state,
-        trigger="pending_targeted_rail",
+        trigger="technical_route_reassessment" if route_signal else "pending_targeted_rail",
         consequence=(
+            "A false rail delays a viable route; a missed rail repeats a blocked or first-principle-incompatible technical route."
+            if route_signal else
             "A false rail delays aligned work; a missed rail permits repeated explicit Goal-contract deviation."
             if signal.get("signal") == "GOAL_CONTRACT_DEVIATION"
             else "A false rail delays aligned work; a missed rail permits repeated North Star deviation."
         ),
-        policy_boundary=str(signal.get("policy") or ""),
+        policy_boundary=(
+            "Every technical route must satisfy the detailed Goal source requirements, first principles, and final acceptance. Repeated blocked routes without new evidence must be replaced or disproved."
+            if route_signal else str(signal.get("policy") or "")
+        ),
         alignment_layer=str(signal.get("alignment_layer") or ""),
         affected_paths=list(signal.get("affected_path_roots") or []),
+        appeal=(
+            f"Route={signal.get('route_label')}; cause_family={signal.get('cause_family')}; repeated_failures={strike}."
+            if route_signal else None
+        ),
     )
     result = invoke_llm_judge(
         packet,
@@ -10622,7 +10910,9 @@ def review_semantic_signal(signal: dict[str, Any]) -> dict[str, Any]:
     if status == "RAIL_ENFORCED" and not confirmed:
         reviewed["deny"] = False
         reviewed["intervention"] = "STRONG_WARNING"
-        reviewed["recommended_action"] = result.get("recommended_action") or "return_to_alignment_target_or_add_evidence"
+        reviewed["recommended_action"] = result.get("recommended_action") or (
+            "research_compare_and_switch_route" if route_signal else "return_to_alignment_target_or_add_evidence"
+        )
         reviewed["reason"] = (
             str(reviewed.get("reason") or "")
             + " LLM Judge did not confirm a targeted rail at high confidence; execution remains available. "
@@ -10939,7 +11229,10 @@ def hook_pre(event: dict[str, Any]) -> int:
 
     semantic_decisions = [
         review_semantic_signal(item) for item in observer_signals
-        if item.get("signal") in {"NORTH_STAR_DEVIATION", "GOAL_CONTRACT_DEVIATION"}
+        if item.get("signal") in {
+            "NORTH_STAR_DEVIATION", "GOAL_CONTRACT_DEVIATION",
+            "ROUTE_REASSESSMENT_REQUIRED", "ROUTE_STAGNATION",
+        }
     ]
     semantic_denial = next((item for item in semantic_decisions if item.get("deny")), None)
     semantic_advisory = next(
@@ -11066,6 +11359,15 @@ def record_program_phase_activity(event: dict[str, Any]) -> None:
 
 def hook_post(event: dict[str, Any]) -> int:
     observer_signals = record_observer_event(event, "PostToolUse")
+    observer_signals = [
+        review_semantic_signal(signal)
+        if signal.get("signal") in {
+            "NORTH_STAR_DEVIATION", "GOAL_CONTRACT_DEVIATION",
+            "ROUTE_REASSESSMENT_REQUIRED", "ROUTE_STAGNATION",
+        }
+        else signal
+        for signal in observer_signals
+    ]
     try:
         record_program_phase_activity(event)
     except (OSError, RuntimeError, ValueError, json.JSONDecodeError):
@@ -11623,6 +11925,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--non-goal", action="append", default=[])
     p.add_argument("--dialogue-summary", action="append", default=[])
     p.add_argument("--replace-existing", action="store_true")
+    p.add_argument("--replacement-reason")
     p.set_defaults(func=cmd_goal_set)
     p = sub.add_parser("phase-set")
     p.add_argument("--id")

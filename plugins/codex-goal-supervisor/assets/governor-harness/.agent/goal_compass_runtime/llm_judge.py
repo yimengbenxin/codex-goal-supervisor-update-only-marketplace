@@ -79,6 +79,17 @@ def _safe_packet(value: dict[str, Any]) -> dict[str, Any]:
         "objective": str(contract.get("objective") or "")[:800],
         "current_state": str(contract.get("current_state") or "")[:600],
         "desired_state": str(contract.get("desired_state") or "")[:600],
+        "source_requirements": [str(item)[:400] for item in contract.get("source_requirements", [])[:12]]
+        if isinstance(contract.get("source_requirements"), list) else [],
+        "first_principles": [
+            {
+                "principle": str(row.get("principle") or "")[:400],
+                "rationale": str(row.get("rationale") or "")[:500],
+                "implications": [str(item)[:300] for item in row.get("implications", [])[:8]],
+            }
+            for row in contract.get("first_principles", [])[:8]
+            if isinstance(row, dict)
+        ] if isinstance(contract.get("first_principles"), list) else [],
         "modules": [
             {
                 "node_id": str(row.get("node_id") or "")[:120],
@@ -178,7 +189,9 @@ def _prompt(packet: dict[str, Any]) -> str:
         "for concrete modules, dependencies, outputs, exit criteria, and final acceptance. Lack of an "
         "obvious module match is not a violation: it may be a prerequisite or bounded exploration. A "
         "targeted rail is justified only for a high-confidence conflict with an explicit North Star "
-        "anti-goal or explicit Goal-contract non-goal, or a repeated high-cost path without new evidence. "
+        "anti-goal, Goal-contract non-goal, source requirement, or first-principle implication, or a repeated "
+        "high-cost technical route without new evidence. When the trigger is route reassessment, test whether "
+        "the current route can satisfy the required user scenario at all, not merely whether its local step can run. "
         "Prefer a scoped warning or request for evidence when uncertain. Return only JSON matching the "
         "supplied schema.\n\n"
         + json.dumps(_safe_packet(packet), ensure_ascii=False, indent=2)

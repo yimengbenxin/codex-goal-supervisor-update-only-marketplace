@@ -1,6 +1,6 @@
 {
   "name": "codex-goal-supervisor",
-  "version": "2.8.6+codex.20260816111230",
+  "version": "2.8.9+codex.20260817042714",
   "description": "Execution convergence for long Codex loops: preserve goals, prove progress, recover, and finish with evidence",
   "author": {
     "name": "Codex Goal Supervisor contributors"
@@ -29,6 +29,7 @@
       "Goal-authored open-source reuse decisions with 24-hour long-task refresh",
       "Hour-level capability segments with real wall-clock deadlines",
       "Live project-local technical route with current-node visualization",
+      "First-principle route convergence with targeted stagnation recovery",
       "Verified project-local procedure Skills and idempotent service runners",
       "Evidence-bearing cross-thread collaboration liveness",
       "Versioned Git marketplace auto-update for new Codex sessions"

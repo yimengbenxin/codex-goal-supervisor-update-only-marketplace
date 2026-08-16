@@ -2,7 +2,7 @@
 
 Codex Goal Supervisor runs as a low-cost background observer after this project explicitly installs it. Explicit activation requires a structured project North Star and the matching Codex Goal mode; normal reads, edits, tests, and delivery do not require a ticket.
 
-The North Star and Goal-mode objective are different layers. The North Star is the concise durable direction. Goal mode contains a 2,000-3,500 character executable contract with modules, concrete actions, serial/parallel relationships, dependencies, outputs, goal contribution, and acceptance. Finalize that contract first, then pass the exact `goal_mode_objective` returned by `goal-set --require-detailed` to native `create_goal` and verify it with `get_goal` before implementation. Native `update_goal` changes status only; it cannot repair an objective created from an earlier summary. Super-complex work also uses a project-relative plan over 4,000 characters; Goal mode keeps a compressed contract and references the full plan rather than replacing its content with a path.
+The North Star and Goal-mode objective are different layers. The North Star is the concise durable direction. Goal mode contains a 2,000-3,500 character executable contract with modules, concrete actions, serial/parallel relationships, dependencies, outputs, goal contribution, and acceptance. Finalize that contract first, then run `goal-set --require-detailed`. Inside a Codex task the command uses official app-server `thread/goal/set`, immediately reads `thread/goal/get`, and commits project state only after exact objective length and SHA-256 verification. An explicitly confirmed durable direction change uses `--replace-existing --replacement-reason <reason>` and records the old objective, acceptance, status, usage, and restorable local snapshot as superseded rather than falsely complete. Super-complex work also uses a project-relative plan over 4,000 characters; Goal mode keeps a compressed contract and references the full plan rather than replacing its content with a path.
 
 For a project too large for one useful Goal, keep the confirmed North Star and
 use a shallow program outline plus one detailed current phase. Each phase is a
@@ -12,7 +12,8 @@ dependencies, outputs, consumers, and validation-catalog IDs. Start it with
 the exact returned objective as the native Goal, and verify its hash. A failed
 `phase-complete` leaves the phase active; only a passing phase can be followed
 by `phase-advance --definition-file <next.json>`. The CLI reports required
-native Goal synchronization but cannot silently rewrite an active Codex Goal.
+native Goal synchronization and performs it automatically when invoked inside
+the target Codex task. A failed native sync leaves the current phase unchanged.
 
 ## Structured Phased Goal Input
 

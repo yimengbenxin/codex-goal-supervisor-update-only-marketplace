@@ -44,6 +44,8 @@ def empty_state() -> dict[str, Any]:
                 "objective": None,
                 "current_state": None,
                 "desired_state": None,
+                "source_requirements": [],
+                "first_principles": [],
                 "modules": [],
                 "completed_program_phases": [],
                 "module_count_total": 0,
@@ -255,6 +257,16 @@ def goal_contract_projection(north_star: dict[str, Any]) -> dict[str, Any]:
         "objective": _bounded_text(definition.get("precise_goal") or north_star.get("goal")),
         "current_state": _bounded_text(definition.get("current_state")),
         "desired_state": _bounded_text(definition.get("desired_state")),
+        "source_requirements": _bounded_strings(definition.get("source_requirements")),
+        "first_principles": [
+            {
+                "principle": _bounded_text(value.get("principle")),
+                "rationale": _bounded_text(value.get("rationale")),
+                "implications": _bounded_strings(value.get("implications")),
+            }
+            for value in definition.get("first_principles", [])[:MAX_GOAL_LIST_ITEMS]
+            if isinstance(value, dict) and _bounded_text(value.get("principle"))
+        ],
         "modules": modules,
         "module_count_total": len(nodes),
         "projection_truncated": len(nodes) > MAX_GOAL_MODULES,
