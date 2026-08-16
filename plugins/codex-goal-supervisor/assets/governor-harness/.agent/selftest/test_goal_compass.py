@@ -12,6 +12,11 @@ import tempfile
 from pathlib import Path
 
 
+# A package selftest validates an isolated fixture. It must never adopt or
+# replace the native Goal of the Codex task that launched the release check.
+os.environ["GOAL_SUPERVISOR_NATIVE_GOAL_BRIDGE"] = "disabled"
+
+
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / ".agent" / "goal_compass.py"
 RUNTIME_PACKAGE = ROOT / ".agent" / "goal_compass_runtime"

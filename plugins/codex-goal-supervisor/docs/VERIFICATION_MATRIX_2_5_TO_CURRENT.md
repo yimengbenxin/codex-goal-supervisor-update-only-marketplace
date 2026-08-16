@@ -1,6 +1,6 @@
 # Business Verification Matrix: 2.5 To Current Candidate
 
-Candidate under test: `2.8.9+codex.20260817042714`
+Candidate under test: `2.8.10+codex.20260817054749`
 
 Release publication is frozen. A row is complete only when its required
 deterministic, distribution, and real-thread evidence has passed. Existing test
@@ -42,6 +42,7 @@ counts and earlier black-box runs are context, not proof for this campaign.
 | 2.8.8 | First-principle technical-route convergence | deterministic + real-thread | Every Goal route stays anchored to source requirements, first principles, and final acceptance. Repeated same-cause failures without evidence require current-tool research and comparison of materially different routes; only the exact proven retry may reach a high-confidence targeted rail. | SOURCE PASS / REAL-THREAD PENDING |
 | 2.8.8 | Domain-neutral low-noise route incidents | deterministic | Software, data, CAD, mobile, manufacturing, and other routes share the same cause-family state machine. One failure is silent, warnings do not call the Judge, state stores no raw command/error text, and a different route remains executable. Project hooks infer omitted event phases from result envelopes and accept common result wrappers. | PASS |
 | 2.8.9 | Unattended native Goal replacement | deterministic + real-thread | Official app-server `thread/goal/set` replaces a stale blocked Goal, `thread/goal/get` verifies exact objective and active status before project state commits, and the old Goal is recorded as superseded with `objective_achieved=false`. | PASS |
+| 2.8.10 | Release selftest Goal isolation | deterministic + real-host trap | Package selftest forces the native bridge off even when the launching Codex task exports a real thread id and an enabled bridge; a trap executable proves the host Goal is never read or replaced. | PASS |
 | current | Existing core regressions | deterministic + distribution | Goal detection, advisory mode, deviation recurrence, validation states, Janitor mark-only behavior, feedback local default, updater boundary, concurrency and status performance remain green. | PASS |
 
 ## Deterministic Commands
