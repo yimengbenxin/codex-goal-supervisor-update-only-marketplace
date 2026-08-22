@@ -48,6 +48,10 @@ from goal_compass_runtime.deviation_incidents import (
     open_correction as open_deviation_correction,
 )
 from goal_compass_runtime.supervision import decide as decide_supervision
+from goal_compass_runtime.capability_profiles import (
+    CapabilityProfileError,
+    resolve_profile as resolve_capability_profile,
+)
 from goal_compass_runtime.observer import (
     apply_observation as apply_observer_observation,
     apply_pending_events as apply_pending_observer_events,
@@ -87,6 +91,7 @@ from goal_compass_runtime.convergence import (
     auto_start_segment as auto_start_convergence_segment,
     compact_status as compact_convergence_status,
     empty_state as empty_convergence_state,
+    goal_contract_fingerprint,
     judge_trigger as convergence_judge_trigger,
     record_collaboration_round as record_convergence_collaboration_round,
     record_evidence as record_convergence_evidence,
@@ -127,6 +132,14 @@ from goal_compass_runtime.phased_goal import (
     validate_outline as validate_program_outline,
     validate_phase as validate_structured_phase,
 )
+from goal_compass_runtime.goal_workstreams import (
+    compact as compact_goal_workstreams,
+    new_state as new_goal_workstream_state,
+    parent_alignment as goal_workstream_parent_alignment,
+    refresh_status as refresh_goal_workstream_status,
+    sha256_text as goal_workstream_sha256,
+    validate_plan as validate_goal_workstream_plan,
+)
 from goal_compass_runtime.native_goal_bridge import (
     NativeGoalBridgeError,
     availability as native_goal_bridge_availability,
@@ -149,6 +162,8 @@ PRUNE_PLAN = AGENT / "prune_plan.json"
 REQUEST_DECISIONS = AGENT / "request_decisions.jsonl"
 QUARANTINE_MANIFEST = AGENT / "quarantine_manifest.jsonl"
 JANITOR_CAPABILITY_LEVEL = "MARK_ONLY"
+GENERAL_PROFILE_ID = "general-initial"
+GOAL_PROFILE_ID = "goal-2.8.10-compatibility"
 LAST_SCAN_SUMMARY: dict[str, Any] = {}
 LENSES = AGENT / "lenses"
 PENDING = AGENT / "tickets" / "pending"
@@ -160,6 +175,8 @@ PROTOCOLS = AGENT / "protocols"
 COORDINATION_CONTRACTS = AGENT / "contracts"
 PROCEDURES = AGENT / "procedures"
 RUNTIME = AGENT / "runtime"
+GOAL_WORKSTREAMS = RUNTIME / "goal_workstreams.json"
+GOAL_WORKSTREAMS_LOCK = RUNTIME / "goal_workstreams.lock"
 BASELINES = RUNTIME / "baselines"
 HOOK_STATE = RUNTIME / "hook_state.json"
 HOOK_STATE_LOCK = RUNTIME / "hook_state.lock"
@@ -290,6 +307,7 @@ PROTECTED_CONTROL_PATTERNS = [
     ".agent/feedback_config.json",
     ".agent/reuse_probe_config.json",
     ".agent/tool_mode.json",
+    ".agent/runtime/goal_workstreams.json",
     ".agent/contracts/**",
 ]
 
@@ -1848,7 +1866,13 @@ def complex_goal_plan_errors(definition: dict[str, Any]) -> list[str]:
             "plan.parallel": ["并行", "parallel"],
             "plan.serial": ["串行", "serial"],
             "plan.dependencies": ["依赖", "dependenc"],
-            "plan.goal_contribution": ["对总目标", "目标贡献", "contribution to"],
+            "plan.goal_contribution": [
+                "对总目标",
+                "目标贡献",
+                "goal_contribution",
+                "goal contribution",
+                "contribution to",
+            ],
             "plan.acceptance": ["验收", "acceptance"],
         }
         for field, needles in required_sections.items():
@@ -7341,7 +7365,7 @@ def merge_hooks_json(existing: dict[str, Any], generated: dict[str, Any]) -> dic
 
 def cmd_goal_set(args: argparse.Namespace) -> int:
     existing = load_json(NORTH_STAR, {}) if NORTH_STAR.exists() else {}
-    if existing.get("confirmed") and not args.replace_existing:
+    if existing.get("confirmed") and not args.replace_existing and not args.validate_only:
         print(json.dumps({
             "ok": False,
             "status": "EXISTING_GOAL_PRESERVED",
@@ -7399,6 +7423,27 @@ def cmd_goal_set(args: argparse.Namespace) -> int:
             } if consultation_missing else {}),
         }, ensure_ascii=False, indent=2))
         return 2
+    if args.validate_only:
+        objective = render_goal_mode_objective(definition)
+        print(json.dumps({
+            "ok": True,
+            "status": "GOAL_CONTRACT_VALIDATED",
+            "structured": str(definition.get("quality") or "").startswith("STRUCTURED"),
+            "detailed": definition.get("quality") == "STRUCTURED_DETAILED",
+            "goal_definition": {
+                "quality": definition.get("quality"),
+                "missing_fields": list(definition.get("missing_fields", [])),
+                "detail_metrics": dict(definition.get("detail_metrics", {})),
+            },
+            "goal_mode_objective": objective,
+            "goal_mode_objective_chars": len(objective),
+            "goal_mode_objective_sha256": sha256_bytes(objective.encode("utf-8")),
+            "execution_plan_ref": definition.get("execution_plan_ref"),
+            "state_changed": False,
+            "native_goal_called": False,
+            "required_action": "run_goal_set_without_validate_only_after_review",
+        }, ensure_ascii=False, indent=2))
+        return 0
     source = "user_explicit_replacement" if existing.get("confirmed") else "user_confirmed"
     data = structured_north_star(args.text, source, definition)
     objective = str(data.get("goal_mode_objective") or "")
@@ -7458,6 +7503,36 @@ def cmd_goal_set(args: argparse.Namespace) -> int:
         "must_do": list(definition.get("source_requirements", [])),
         "execution_mode": "project_onboarding",
     })
+    planning_research = (
+        definition.get("planning_research")
+        if isinstance(definition.get("planning_research"), dict)
+        else {}
+    )
+    direct_candidates = onboarding_probe.get("reuse_discovery", {}).get("direct_reuse_candidates", [])
+    consultation = (
+        planning_research.get("user_consultation")
+        if isinstance(planning_research.get("user_consultation"), dict)
+        else {}
+    )
+    research_rejects_reuse = (
+        planning_research.get("completed") is True
+        and (
+            planning_research.get("reusable_candidate_found") is False
+            or str(consultation.get("reuse_choice") or "").strip().upper() == "REJECT"
+        )
+    )
+    rejection_rationale = str(
+        planning_research.get("no_suitable_reuse_reason")
+        or consultation.get("rationale")
+        or ""
+    ).strip()
+    if direct_candidates and research_rejects_reuse and len(rejection_rationale) >= 20:
+        onboarding_probe = apply_reuse_decision(
+            onboarding_probe,
+            decision="REJECT_WITH_EVIDENCE",
+            rationale=rejection_rationale,
+            agent_dir=AGENT,
+        )
     payload = {
         "ok": True,
         "north_star_goal": args.text,
@@ -7510,6 +7585,7 @@ def synchronize_native_goal(
     transition: str,
     reason: str,
     objective_achieved: bool | None,
+    status: str = "active",
 ) -> dict[str, Any]:
     base = {
         "objective_source_field": objective_source_field,
@@ -7540,7 +7616,11 @@ def synchronize_native_goal(
             ),
         }
     try:
-        synced = replace_native_goal(objective, thread_id=str(state.get("thread_id") or ""))
+        synced = replace_native_goal(
+            objective,
+            thread_id=str(state.get("thread_id") or ""),
+            status=status,
+        )
     except NativeGoalBridgeError as exc:
         return {
             **base,
@@ -8011,6 +8091,390 @@ def cmd_phase_advance(args: argparse.Namespace) -> int:
     write_json(PROGRAM_PHASE, payload)
     refresh_convergence_projection()
     print(json.dumps({"ok": True, "previous_phase": previous, "program_phase": payload}, ensure_ascii=False, indent=2))
+    return 0
+
+
+def goal_workstream_state() -> dict[str, Any]:
+    return load_json(GOAL_WORKSTREAMS, {}) if GOAL_WORKSTREAMS.exists() else {}
+
+
+def goal_workstream_launch_payload(state: dict[str, Any], workstream_id: str) -> dict[str, Any]:
+    rows = state.get("workstreams") if isinstance(state.get("workstreams"), dict) else {}
+    row = rows.get(workstream_id) if isinstance(rows.get(workstream_id), dict) else {}
+    shared_by_id = {
+        str(contract.get("contract_id") or ""): contract
+        for contract in state.get("shared_contracts", [])
+        if isinstance(contract, dict)
+    }
+    contracts = [
+        shared_by_id[contract_id]
+        for contract_id in row.get("shared_contract_ids", [])
+        if contract_id in shared_by_id
+    ]
+    prompt = (
+        f"Use Codex Goal Supervisor for child workstream {workstream_id}: {row.get('title')}. "
+        f"Parent North Star: {state.get('parent_north_star_goal')}. "
+        f"Your sole responsibility is: {row.get('responsibility')}. "
+        f"Produce: {'; '.join(row.get('outputs') or [])}. "
+        f"These outputs are consumed by: {'; '.join(row.get('consumers') or [])}. "
+        "First research current reusable tools for this bounded workstream, then author a task-specific detailed Goal. "
+        f"Activate that Goal with `python3 .agent/goal_compass.py goal-workstreams --set-goal {workstream_id} "
+        "--definition-file <project-relative-json>`. Stay inside the assigned writable paths and shared contracts. "
+        "Do not rewrite the project North Star. On completion, run the assigned validations and report evidence with "
+        f"`python3 .agent/goal_compass.py goal-workstreams --complete {workstream_id} --evidence-id <id> "
+        "--summary <summary>`. Return outputs and evidence to the parent integration owner."
+    )
+    return {
+        "workstream_id": workstream_id,
+        "title": row.get("title"),
+        "dependencies": list(row.get("dependencies") or []),
+        "estimated_hours": row.get("estimated_hours"),
+        "writable_paths": list(row.get("writable_paths") or []),
+        "read_dependencies": list(row.get("read_dependencies") or []),
+        "immutable_paths": list(row.get("immutable_paths") or []),
+        "validation_ids": list(row.get("validation_ids") or []),
+        "shared_contracts": contracts,
+        "prompt": prompt,
+        "required_action": "parent_codex_create_thread",
+    }
+
+
+def goal_workstream_launches(state: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        goal_workstream_launch_payload(state, workstream_id)
+        for workstream_id in state.get("ready_workstream_ids", [])
+    ]
+
+
+def goal_workstream_validation_errors(plan: dict[str, Any]) -> list[str]:
+    known = catalog()
+    errors: list[str] = []
+    references: list[tuple[str, list[str]]] = []
+    for row in plan.get("workstreams", []):
+        if not isinstance(row, dict):
+            continue
+        workstream_id = str(row.get("workstream_id") or "unknown")
+        references.append((
+            f"workstream {workstream_id}",
+            clean_goal_text_list(row.get("validation_ids", [])),
+        ))
+    final_integration = plan.get("final_integration")
+    if isinstance(final_integration, dict):
+        references.append((
+            "final_integration",
+            clean_goal_text_list(final_integration.get("validation_ids", [])),
+        ))
+    for source, validation_ids_value in references:
+        for validation_id in validation_ids_value:
+            entry = known.get(validation_id)
+            if not isinstance(entry, dict) or not (entry.get("cmd") or entry.get("argv")):
+                errors.append(
+                    f"{source} references validation_catalog id not ready before fanout: {validation_id}"
+                )
+    return list(dict.fromkeys(errors))
+
+
+def cmd_goal_workstreams(args: argparse.Namespace) -> int:
+    north = north_star()
+    state = goal_workstream_state()
+
+    if args.plan_file:
+        definition = north.get("goal_definition") if isinstance(north.get("goal_definition"), dict) else {}
+        if not north.get("confirmed") or definition.get("quality") != "STRUCTURED_DETAILED":
+            print(json.dumps({
+                "ok": False,
+                "status": "PARENT_DETAILED_GOAL_REQUIRED",
+                "required_action": "confirm_a_detailed_parent_goal_before_thread_fanout",
+            }, ensure_ascii=False, indent=2))
+            return 2
+        payload, error = phase_contract_file(args.plan_file)
+        if error:
+            print(json.dumps({"ok": False, "status": "WORKSTREAM_PLAN_INVALID", "errors": [error]}, ensure_ascii=False, indent=2))
+            return 2
+        objective = str(north.get("goal_mode_objective") or "")
+        plan, errors = validate_goal_workstream_plan(
+            payload,
+            parent_north_star_goal=str(north.get("goal") or ""),
+            parent_goal_objective_sha256=goal_workstream_sha256(objective),
+        )
+        errors.extend(goal_workstream_validation_errors(plan))
+        if errors:
+            print(json.dumps({
+                "ok": False,
+                "status": "WORKSTREAM_PLAN_INVALID",
+                "errors": errors,
+                "state_changed": False,
+            }, ensure_ascii=False, indent=2))
+            return 2
+        planned = new_goal_workstream_state(plan, observed_at=now())
+        result = {
+            "ok": True,
+            "status": "WORKSTREAM_PLAN_VALIDATED" if args.validate_only else "WORKSTREAM_PLAN_READY",
+            "goal_workstreams": compact_goal_workstreams(
+                planned,
+                alignment=goal_workstream_parent_alignment(planned, north),
+            ),
+            "thread_launches": goal_workstream_launches(planned),
+            "state_changed": not args.validate_only,
+        }
+        if not args.validate_only:
+            with exclusive_file_lock(GOAL_WORKSTREAMS_LOCK, timeout=1.0, stale_seconds=30.0):
+                write_json(GOAL_WORKSTREAMS, planned)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.set_goal:
+        workstream_id = str(args.set_goal).strip()
+        if not state:
+            print(json.dumps({"ok": False, "status": "WORKSTREAM_PLAN_REQUIRED"}, ensure_ascii=False, indent=2))
+            return 2
+        alignment = goal_workstream_parent_alignment(state, north)
+        if alignment.get("status") != "ALIGNED":
+            print(json.dumps({
+                "ok": False,
+                "status": "PARENT_GOAL_CHANGED",
+                "alignment": alignment,
+                "required_action": "return_evidence_to_parent_for_reconciliation",
+            }, ensure_ascii=False, indent=2))
+            return 2
+        rows = state.get("workstreams") if isinstance(state.get("workstreams"), dict) else {}
+        row = rows.get(workstream_id) if isinstance(rows.get(workstream_id), dict) else None
+        if row is None:
+            print(json.dumps({"ok": False, "status": "WORKSTREAM_NOT_FOUND", "workstream_id": workstream_id}, ensure_ascii=False, indent=2))
+            return 2
+        if workstream_id not in state.get("ready_workstream_ids", []) and row.get("status") != "ACTIVE":
+            print(json.dumps({
+                "ok": False,
+                "status": "WORKSTREAM_DEPENDENCIES_INCOMPLETE",
+                "dependencies": list(row.get("dependencies") or []),
+            }, ensure_ascii=False, indent=2))
+            return 2
+        payload, error = phase_contract_file(args.definition_file)
+        if error:
+            print(json.dumps({"ok": False, "status": "CHILD_GOAL_INVALID", "errors": [error]}, ensure_ascii=False, indent=2))
+            return 2
+        child_goal = str(payload.get("precise_goal") or payload.get("desired_state") or row.get("title") or "").strip()
+        definition = goal_definition_from_payload(child_goal, payload)
+        definition["north_star_goal"] = str(state.get("parent_north_star_goal") or "")
+        source_requirements = clean_goal_text_list(definition.get("source_requirements", []))
+        assignment_requirements = [
+            f"Parent North Star: {state.get('parent_north_star_goal')}",
+            f"Assigned workstream {workstream_id}: {row.get('responsibility')}",
+            "Required outputs: " + "; ".join(row.get("outputs") or []),
+            "Downstream consumers: " + "; ".join(row.get("consumers") or []),
+        ]
+        definition["source_requirements"] = list(dict.fromkeys([*source_requirements, *assignment_requirements]))
+        objective = render_goal_mode_objective(definition)
+        errors = detailed_goal_definition_errors(definition)
+        if not (2000 <= len(objective) <= 3500):
+            errors.append("goal_mode_objective_chars must be between 2000 and 3500")
+        if errors:
+            print(json.dumps({
+                "ok": False,
+                "status": "CHILD_GOAL_INVALID",
+                "errors": list(dict.fromkeys(errors)),
+                "goal_mode_objective_chars": len(objective),
+            }, ensure_ascii=False, indent=2))
+            return 2
+        bridge = native_goal_bridge_availability()
+        thread_id = str(bridge.get("thread_id") or "")
+        if not bridge.get("available") or not thread_id:
+            print(json.dumps({
+                "ok": False,
+                "status": "CREATE_REQUIRED",
+                "workstream_id": workstream_id,
+                "required_action": "run_child_goal_activation_inside_the_target_codex_task",
+            }, ensure_ascii=False, indent=2))
+            return 2
+        with exclusive_file_lock(GOAL_WORKSTREAMS_LOCK, timeout=1.0, stale_seconds=30.0):
+            latest = goal_workstream_state()
+            latest_alignment = goal_workstream_parent_alignment(latest, north)
+            latest_rows = latest.get("workstreams") if isinstance(latest.get("workstreams"), dict) else {}
+            latest_row = latest_rows.get(workstream_id) if isinstance(latest_rows.get(workstream_id), dict) else None
+            if latest_alignment.get("status") != "ALIGNED" or latest_row is None:
+                print(json.dumps({"ok": False, "status": "PARENT_GOAL_CHANGED_DURING_ACTIVATION"}, ensure_ascii=False, indent=2))
+                return 2
+            if latest_row.get("status") not in {"PENDING", "ACTIVE"}:
+                print(json.dumps({"ok": False, "status": "WORKSTREAM_NOT_ACTIVATABLE"}, ensure_ascii=False, indent=2))
+                return 2
+            bound_thread = str(latest_row.get("thread_id") or "")
+            if bound_thread and bound_thread != thread_id:
+                print(json.dumps({
+                    "ok": False,
+                    "status": "WORKSTREAM_ALREADY_BOUND",
+                    "required_action": "use_the_existing_child_task_or_create_a_distinct_workstream",
+                }, ensure_ascii=False, indent=2))
+                return 2
+            latest_row.update({
+                "status": "ACTIVATING",
+                "thread_id": thread_id,
+                "thread_id_sha256": goal_workstream_sha256(thread_id),
+                "activation_started_at": now(),
+            })
+            latest = refresh_goal_workstream_status(latest, observed_at=now())
+            write_json(GOAL_WORKSTREAMS, latest)
+        native_sync = synchronize_native_goal(
+            objective,
+            objective_source_field=f"goal_workstreams.{workstream_id}.goal_mode_objective",
+            transition="CHILD_WORKSTREAM_GOAL_ACTIVATION",
+            reason=f"Activate independent child Goal for parent workstream {workstream_id}",
+            objective_achieved=False,
+        )
+        if native_sync.get("status") != "SYNCED":
+            with exclusive_file_lock(GOAL_WORKSTREAMS_LOCK, timeout=1.0, stale_seconds=30.0):
+                failed_state = goal_workstream_state()
+                failed_rows = failed_state.get("workstreams") if isinstance(failed_state.get("workstreams"), dict) else {}
+                failed_row = failed_rows.get(workstream_id) if isinstance(failed_rows.get(workstream_id), dict) else None
+                if failed_row is not None and failed_row.get("status") == "ACTIVATING" and failed_row.get("thread_id") == thread_id:
+                    failed_row.update({
+                        "status": "PENDING",
+                        "thread_id": None,
+                        "thread_id_sha256": None,
+                        "activation_started_at": None,
+                    })
+                    write_json(GOAL_WORKSTREAMS, refresh_goal_workstream_status(failed_state, observed_at=now()))
+            print(json.dumps({
+                "ok": False,
+                "status": native_sync.get("status"),
+                "workstream_id": workstream_id,
+                "native_goal_sync": compact_native_goal_sync(native_sync),
+            }, ensure_ascii=False, indent=2))
+            return 2
+        with exclusive_file_lock(GOAL_WORKSTREAMS_LOCK, timeout=1.0, stale_seconds=30.0):
+            latest = goal_workstream_state()
+            latest_alignment = goal_workstream_parent_alignment(latest, north)
+            latest_rows = latest.get("workstreams") if isinstance(latest.get("workstreams"), dict) else {}
+            latest_row = latest_rows.get(workstream_id) if isinstance(latest_rows.get(workstream_id), dict) else None
+            if (
+                latest_alignment.get("status") != "ALIGNED"
+                or latest_row is None
+                or latest_row.get("status") != "ACTIVATING"
+                or latest_row.get("thread_id") != thread_id
+            ):
+                print(json.dumps({"ok": False, "status": "PARENT_GOAL_CHANGED_DURING_ACTIVATION"}, ensure_ascii=False, indent=2))
+                return 2
+            latest_row.update({
+                "status": "ACTIVE",
+                "thread_id": thread_id,
+                "thread_id_sha256": goal_workstream_sha256(thread_id) if thread_id else native_sync.get("thread_id_sha256"),
+                "goal_definition": definition,
+                "goal_mode_objective": objective,
+                "goal_mode_objective_sha256": goal_workstream_sha256(objective),
+                "native_goal_sync": compact_native_goal_sync(native_sync),
+                "activated_at": now(),
+            })
+            latest = refresh_goal_workstream_status(latest, observed_at=now())
+            write_json(GOAL_WORKSTREAMS, latest)
+        print(json.dumps({
+            "ok": True,
+            "status": "CHILD_GOAL_ACTIVE",
+            "workstream_id": workstream_id,
+            "parent_north_star_goal": latest.get("parent_north_star_goal"),
+            "goal_mode_objective_chars": len(objective),
+            "goal_mode_objective_sha256": goal_workstream_sha256(objective),
+            "native_goal_sync": compact_native_goal_sync(native_sync),
+            "writable_paths": list(latest_row.get("writable_paths") or []),
+            "required_outputs": list(latest_row.get("outputs") or []),
+            "consumers": list(latest_row.get("consumers") or []),
+        }, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.complete:
+        workstream_id = str(args.complete).strip()
+        rows = state.get("workstreams") if isinstance(state.get("workstreams"), dict) else {}
+        row = rows.get(workstream_id) if isinstance(rows.get(workstream_id), dict) else None
+        evidence_ids = clean_goal_text_list(args.evidence_id)
+        summary = str(args.summary or "").strip()
+        if row is None or row.get("status") != "ACTIVE":
+            print(json.dumps({"ok": False, "status": "ACTIVE_WORKSTREAM_REQUIRED", "workstream_id": workstream_id}, ensure_ascii=False, indent=2))
+            return 2
+        if not evidence_ids or not summary:
+            print(json.dumps({
+                "ok": False,
+                "status": "WORKSTREAM_EVIDENCE_REQUIRED",
+                "required_action": "provide_evidence_id_and_completion_summary",
+            }, ensure_ascii=False, indent=2))
+            return 2
+        bridge = native_goal_bridge_availability()
+        active_thread = str(bridge.get("thread_id") or "")
+        if row.get("thread_id") and active_thread and str(row.get("thread_id")) != active_thread:
+            print(json.dumps({
+                "ok": False,
+                "status": "WORKSTREAM_THREAD_MISMATCH",
+                "required_action": "complete_the_workstream_from_its_bound_child_thread",
+            }, ensure_ascii=False, indent=2))
+            return 2
+        validation_results = []
+        for validation_id in row.get("validation_ids", []):
+            passed, detail = run_validation(str(validation_id))
+            validation_results.append({"validation_id": validation_id, "ok": passed, "detail": detail})
+            if not passed:
+                print(json.dumps({
+                    "ok": False,
+                    "status": "WORKSTREAM_VALIDATION_FAILED",
+                    "workstream_id": workstream_id,
+                    "validation_results": validation_results,
+                    "required_action": "repair_and_retry_child_validation",
+                }, ensure_ascii=False, indent=2))
+                return 3
+        native_sync = synchronize_native_goal(
+            str(row.get("goal_mode_objective") or ""),
+            objective_source_field=f"goal_workstreams.{workstream_id}.goal_mode_objective",
+            transition="CHILD_WORKSTREAM_COMPLETION",
+            reason=f"Validated child workstream {workstream_id} completed and returned evidence to the parent",
+            objective_achieved=True,
+            status="complete",
+        )
+        if native_sync.get("status") != "SYNCED":
+            print(json.dumps({
+                "ok": False,
+                "status": native_sync.get("status"),
+                "native_goal_sync": compact_native_goal_sync(native_sync),
+            }, ensure_ascii=False, indent=2))
+            return 2
+        with exclusive_file_lock(GOAL_WORKSTREAMS_LOCK, timeout=1.0, stale_seconds=30.0):
+            latest = goal_workstream_state()
+            latest_rows = latest.get("workstreams") if isinstance(latest.get("workstreams"), dict) else {}
+            latest_row = latest_rows.get(workstream_id) if isinstance(latest_rows.get(workstream_id), dict) else None
+            if latest_row is None or latest_row.get("status") != "ACTIVE":
+                print(json.dumps({"ok": False, "status": "WORKSTREAM_STATE_CHANGED"}, ensure_ascii=False, indent=2))
+                return 2
+            latest_row.update({
+                "status": "COMPLETE",
+                "completed_at": now(),
+                "completion_summary": summary,
+                "evidence_ids": evidence_ids,
+                "validation_results": validation_results,
+                "native_goal_sync": compact_native_goal_sync(native_sync),
+            })
+            latest = refresh_goal_workstream_status(latest, observed_at=now())
+            write_json(GOAL_WORKSTREAMS, latest)
+        print(json.dumps({
+            "ok": True,
+            "status": "WORKSTREAM_COMPLETE",
+            "workstream_id": workstream_id,
+            "validation_results": validation_results,
+            "goal_workstreams": compact_goal_workstreams(
+                latest,
+                alignment=goal_workstream_parent_alignment(latest, north),
+            ),
+            "thread_launches": goal_workstream_launches(latest),
+            "required_action": "launch_newly_ready_workstreams_or_integrate_completed_outputs",
+        }, ensure_ascii=False, indent=2))
+        return 0
+
+    if not state:
+        print(json.dumps({"ok": True, "status": "UNSET", "goal_workstreams": {"status": "UNSET"}}, ensure_ascii=False, indent=2))
+        return 0
+    state = refresh_goal_workstream_status(state, observed_at=now())
+    print(json.dumps({
+        "ok": True,
+        "status": state.get("status"),
+        "goal_workstreams": compact_goal_workstreams(
+            state,
+            alignment=goal_workstream_parent_alignment(state, north),
+        ),
+    }, ensure_ascii=False, indent=2))
     return 0
 
 
@@ -9863,6 +10327,8 @@ def cmd_status(args: argparse.Namespace) -> int:
         else auditor.get("required_action", "continue") if active else inactive_action
     )
     north = north_star()
+    capability_profile = capability_profile_summary(north)
+    goal_profile_active = capability_profile.get("profile_id") == GOAL_PROFILE_ID
     definition = goal_definition_summary(north)
     observer = observer_summary()
     convergence = compact_convergence_status(convergence_state())
@@ -9899,13 +10365,14 @@ def cmd_status(args: argparse.Namespace) -> int:
     } if evaluation else None
     truth_status = evaluation.get("status") if active and evaluation else (
         "GOAL_CERTIFIED_COMPLETE" if completion_certified else
-        "IDLE" if north.get("confirmed") else "NEEDS_CONFIRMATION"
+        "IDLE" if north.get("confirmed") or not goal_profile_active else "NEEDS_CONFIRMATION"
     )
     reasons = list(evaluation.get("reasons") or []) if evaluation else []
     reason = reasons[0] if reasons else (
         "Current ticket has not been checked." if active else
         "Final North Star regression passed." if completion_certified else
         "No ACTIVE ticket; normal execution may continue." if north.get("confirmed") else
+        "General Profile is active; no native Goal or North Star is required for ordinary work." if not goal_profile_active else
         NORTH_STAR_CONFIRMATION_MESSAGE
     )
     if completion_certified and not active:
@@ -9948,6 +10415,15 @@ def cmd_status(args: argparse.Namespace) -> int:
             "count": backlog_count(),
         },
     }
+    if not goal_profile_active:
+        payload["profile"] = capability_profile.get("profile_id")
+    workstreams = goal_workstream_state()
+    if workstreams:
+        workstreams = refresh_goal_workstream_status(workstreams, observed_at=now())
+        payload["goal_workstreams"] = compact_goal_workstreams(
+            workstreams,
+            alignment=goal_workstream_parent_alignment(workstreams, north),
+        )
     native_goal_status = (north.get("native_goal_sync") or {}).get("status")
     if native_goal_status not in {None, "CREATE_REQUIRED"}:
         payload["north_star"]["native_goal_sync"] = native_goal_status
@@ -9961,6 +10437,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         previous = last_ticket()
         payload.update({
             "convergence": convergence,
+            "capability_profile": capability_profile,
             "tool_mode": tool_mode_config(),
             "observer": observer,
             "current_ticket": {
@@ -10630,9 +11107,48 @@ def tool_mode_config() -> dict[str, Any]:
     })
 
 
+def capability_profile_summary(north: dict[str, Any] | None = None) -> dict[str, Any]:
+    config = tool_mode_config()
+    requested = str(config.get("profile_id") or "").strip()
+    stored_north = north if isinstance(north, dict) else load_json(NORTH_STAR, {})
+    profile_id = requested or (GOAL_PROFILE_ID if stored_north.get("confirmed") else GENERAL_PROFILE_ID)
+    try:
+        resolved = resolve_capability_profile(profile_id)
+    except CapabilityProfileError as exc:
+        return {
+            "profile_id": profile_id,
+            "status": "LEGACY_FAIL_OPEN",
+            "reason": str(exc)[:240],
+            "ordinary_execution_blocked": False,
+        }
+    policies = resolved.get("policies", {})
+    counts = {"required": 0, "conditional": 0, "optional": 0}
+    for policy in policies.values():
+        obligation = str(policy.get("obligation") or "optional")
+        if obligation in counts:
+            counts[obligation] += 1
+    return {
+        "profile_id": profile_id,
+        "status": "ACTIVE",
+        "capability_count": resolved.get("capability_count"),
+        "obligation_counts": counts,
+        "ordinary_execution_blocked": False,
+    }
+
+
 def observer_enabled() -> bool:
     config = tool_mode_config()
-    return config.get("enabled") is True and config.get("mode") == "BACKGROUND_ADVISORY"
+    if config.get("enabled") is not True or config.get("mode") != "BACKGROUND_ADVISORY":
+        return False
+    summary = capability_profile_summary()
+    if summary.get("status") == "LEGACY_FAIL_OPEN":
+        return True
+    try:
+        resolved = resolve_capability_profile(str(summary.get("profile_id") or GENERAL_PROFILE_ID))
+    except CapabilityProfileError:
+        return True
+    policy = resolved.get("policies", {}).get("observer.low_noise", {})
+    return policy.get("availability") == "available" and policy.get("obligation") in {"conditional", "required"}
 
 
 def hook_write_paths(event: dict[str, Any]) -> list[str]:
@@ -11186,7 +11702,7 @@ def hook_pre(event: dict[str, Any]) -> int:
     subcmd = goal_compass_command(command) if command else None
     allowed_goal_commands = {
         "init", "compile", "ready", "start", "status", "check", "backlog", "close", "abort",
-        "goal-set", "phase-set", "phase-complete", "phase-advance", "goal-detect", "goal-check", "request", "onboard-scan",
+        "goal-set", "phase-set", "phase-complete", "phase-advance", "goal-workstreams", "goal-detect", "goal-check", "request", "onboard-scan",
         "prune-check", "prune-plan", "prune-apply", "doctor", "company-record", "company-status",
         "evidence-add", "evidence-list", "feedback", "feedback-config", "reuse-check",
         "deviation-correct", "deviation-corrected", "convergence",
@@ -11675,7 +12191,7 @@ def cmd_convergence(args: argparse.Namespace) -> int:
                 validation_run = final_ticket.get("validation_run", {})
                 completion_status = "CERTIFIED_COMPLETE" if validation_ok else "FINAL_REGRESSION_FAILED"
         north_hash = (
-            sha256_bytes(json.dumps(north, ensure_ascii=False, sort_keys=True).encode("utf-8"))
+            goal_contract_fingerprint(north)
             if north.get("confirmed") else None
         )
         completion = {
@@ -11926,6 +12442,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dialogue-summary", action="append", default=[])
     p.add_argument("--replace-existing", action="store_true")
     p.add_argument("--replacement-reason")
+    p.add_argument("--validate-only", action="store_true")
     p.set_defaults(func=cmd_goal_set)
     p = sub.add_parser("phase-set")
     p.add_argument("--id")
@@ -11944,6 +12461,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--definition-file")
     p.add_argument("--reason", required=True)
     p.set_defaults(func=cmd_phase_advance)
+    p = sub.add_parser("goal-workstreams")
+    workstream_action = p.add_mutually_exclusive_group()
+    workstream_action.add_argument("--plan-file")
+    workstream_action.add_argument("--set-goal")
+    workstream_action.add_argument("--complete")
+    p.add_argument("--definition-file")
+    p.add_argument("--validate-only", action="store_true")
+    p.add_argument("--evidence-id", action="append", default=[])
+    p.add_argument("--summary")
+    p.set_defaults(func=cmd_goal_workstreams)
     sub.add_parser("goal-detect").set_defaults(func=cmd_goal_detect)
     p = sub.add_parser("goal-check")
     p.add_argument("--user-goal", required=True)

@@ -1,8 +1,10 @@
 # Codex Goal Supervisor In This Project
 
-Codex Goal Supervisor runs as a low-cost background observer after this project explicitly installs it. Explicit activation requires a structured project North Star and the matching Codex Goal mode; normal reads, edits, tests, and delivery do not require a ticket.
+Codex Goal Supervisor runs as a low-cost background observer after this project explicitly installs it. General Profile activation does not require a North Star or native Goal. Selecting Goal Profile requires a structured project North Star and the matching Codex Goal mode; normal reads, edits, tests, and delivery do not require a ticket.
 
-The North Star and Goal-mode objective are different layers. The North Star is the concise durable direction. Goal mode contains a 2,000-3,500 character executable contract with modules, concrete actions, serial/parallel relationships, dependencies, outputs, goal contribution, and acceptance. Finalize that contract first, then run `goal-set --require-detailed`. Inside a Codex task the command uses official app-server `thread/goal/set`, immediately reads `thread/goal/get`, and commits project state only after exact objective length and SHA-256 verification. An explicitly confirmed durable direction change uses `--replace-existing --replacement-reason <reason>` and records the old objective, acceptance, status, usage, and restorable local snapshot as superseded rather than falsely complete. Super-complex work also uses a project-relative plan over 4,000 characters; Goal mode keeps a compressed contract and references the full plan rather than replacing its content with a path.
+General Profile always enables two low-noise instruction-hygiene rules after project activation. A completed temporary request is tombstoned, and compaction restores the primary task without repeating the temporary request text. A confirmed rejected element may appear in the correction response once, but later residue in titles, comments, narrative files, or completion summaries is blocked until rewritten as the positive canonical result. Normal product code remains available, and an explicit user instruction can reopen the element. The bounded local state is redacted.
+
+The North Star and Goal-mode objective are different layers. The North Star is the concise durable direction. Goal mode contains a 2,000-3,500 character executable contract with modules, concrete actions, serial/parallel relationships, dependencies, outputs, goal contribution, and acceptance. Finalize that contract first, then run `goal-set --require-detailed --validate-only`. This returns the exact rendered objective, character count, SHA-256, and missing fields without changing project/native Goal state, starting the roadmap, or probing reuse again. Review it, then remove `--validate-only` for the single state-changing call. Standard structured Goals are rendered from their structured fields; a hand-authored `goal_mode_objective` does not override that projection. Inside a Codex task the state-changing command uses official app-server `thread/goal/set`, immediately reads `thread/goal/get`, and commits project state only after exact objective length and SHA-256 verification. An explicitly confirmed durable direction change uses `--replace-existing --replacement-reason <reason>` and records the old objective, acceptance, status, usage, and restorable local snapshot as superseded rather than falsely complete. Super-complex work also uses a project-relative plan over 4,000 characters; Goal mode keeps a compressed contract and references the full plan rather than replacing its content with a path.
 
 For a project too large for one useful Goal, keep the confirmed North Star and
 use a shallow program outline plus one detailed current phase. Each phase is a
@@ -121,6 +123,86 @@ returns the exact native Goal objective. Compatibility aliases such as
 `detailed_goal_definition`, `validation_catalog_ids`, `id`, `timebox_hours`,
 and `depends_on` are normalized, but new definitions should use the canonical
 shape above. Contract errors point back to this section.
+
+## Hierarchical Goal Workstreams
+
+Use `goal-workstreams` only when a detailed parent Goal has multiple independent
+workstreams and parallel execution has positive net benefit. The parent Codex
+task remains the sole integration owner. The CLI returns validated launch
+payloads; the parent uses Codex `create_thread` to create each independent task.
+Company subagents and child Codex tasks are separate mechanisms.
+
+The parent plan is a project-relative JSON object:
+
+```json
+{
+  "parent_north_star_goal": "exact confirmed North Star",
+  "fanout_reason": "why independent tasks reduce completion time",
+  "integration_owner": "parent Codex task",
+  "expected_net_benefit": {
+    "serial_hours": 12,
+    "parallel_hours": 5,
+    "coordination_hours": 1,
+    "integration_hours": 2
+  },
+  "shared_contracts": [{
+    "contract_id": "shared-result-contract",
+    "subject": "cross-workstream result",
+    "rule": "one versioned schema and error model",
+    "consumers": ["workstream-a", "workstream-b", "integration"]
+  }],
+  "workstreams": [{
+    "workstream_id": "workstream-a",
+    "title": "Independent module A",
+    "responsibility": "bounded implementation responsibility",
+    "parent_contribution": "how its output advances final integration",
+    "execution_mode": "PARALLEL",
+    "parallel_group": "foundation",
+    "estimated_hours": 4,
+    "dependencies": [],
+    "inputs": ["shared-result-contract"],
+    "outputs": ["validated module output"],
+    "consumers": ["integration"],
+    "writable_paths": ["src/module_a/**", "tests/module_a/**"],
+    "read_dependencies": ["contracts/result.json"],
+    "immutable_paths": ["contracts/result.json"],
+    "validation_ids": ["module_a_validation"],
+    "shared_contract_ids": ["shared-result-contract"]
+  }],
+  "final_integration": {
+    "inputs": ["validated module output"],
+    "validation_ids": ["project_integration_validation"],
+    "acceptance": "all declared workstream outputs integrate through the shared contract"
+  }
+}
+```
+
+At least two initially dependency-ready parallel workstreams are required.
+Dependencies inside one parallel group, dependency cycles, overlapping writable
+paths, unknown shared contracts, missing consumers, or non-positive time savings
+are rejected before any child task starts.
+
+```bash
+python3 .agent/goal_compass.py goal-workstreams --plan-file workstreams.json --validate-only
+python3 .agent/goal_compass.py goal-workstreams --plan-file workstreams.json
+python3 .agent/goal_compass.py goal-workstreams
+```
+
+Each returned `thread_launches` entry contains the assignment, scope, contracts,
+validation IDs, and one launch prompt. In that child Codex task, author a normal
+detailed Goal JSON and run:
+
+```bash
+python3 .agent/goal_compass.py goal-workstreams --set-goal workstream-a --definition-file child-goal.json
+python3 .agent/goal_compass.py goal-workstreams --complete workstream-a --evidence-id evidence-ref --summary "validated output returned to parent"
+```
+
+`--set-goal` installs and verifies the child task's native Goal without changing
+the project North Star. Completion runs the assigned validation IDs and only
+then unlocks dependency-ready workstreams. Session start and post-compaction
+restore the child assignment and parent alignment. If the parent North Star or
+detailed Goal changes, only further child product writes pause for parent
+reconciliation; reads and evidence return stay available.
 
 Each implementation action must have verification proportional to its risk. Use focused evidence for local changes instead of repeatedly running the full suite. Before claiming the entire North Star complete, run `convergence --certify-goal --final-validation-id <catalog-id>` with project-level end-to-end regression ids. Missing or failed regression cannot certify completion; only `CERTIFIED_COMPLETE` can.
 

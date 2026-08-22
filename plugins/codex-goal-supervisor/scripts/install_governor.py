@@ -288,6 +288,24 @@ def plugin_version() -> str:
     return str(data.get("version") or "unknown")
 
 
+def managed_runtime_sha256(target: Path) -> str:
+    """Hash every installer-owned immutable file using the source file set."""
+    digest = hashlib.sha256()
+    excluded = STATE_FILES | set(MERGE_JSON_FILES) | {PROVENANCE_FILE}
+    for source in sorted(path for path in HARNESS_ROOT.rglob("*") if path.is_file()):
+        rel = source.relative_to(HARNESS_ROOT)
+        rel_text = rel.as_posix()
+        if not allowed(rel) or rel_text in excluded:
+            continue
+        installed = target / rel
+        digest.update(rel_text.encode("utf-8"))
+        digest.update(b"\0")
+        value = sha256_file(installed) if installed.is_file() else "MISSING"
+        digest.update(value.encode("ascii"))
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
 def write_install_provenance(target: Path, writes: int, skips: int, filtered: int, initialized: bool) -> None:
     path = target / PROVENANCE_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -297,6 +315,7 @@ def write_install_provenance(target: Path, writes: int, skips: int, filtered: in
         "plugin_version": plugin_version(),
         "installed_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
         "runtime_sha256": sha256_file(compass) if compass.is_file() else None,
+        "managed_runtime_sha256": managed_runtime_sha256(target),
         "initialized": initialized,
         "install_summary": {"writes": writes, "skips": skips, "filtered": filtered},
         "migration_policy": "preserve_project_state_and_remove_only_known_legacy_examples",

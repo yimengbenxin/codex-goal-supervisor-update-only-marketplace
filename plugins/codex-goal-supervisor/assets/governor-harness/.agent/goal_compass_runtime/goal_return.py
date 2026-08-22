@@ -712,8 +712,9 @@ def _recovery_text(north_star: dict[str, Any], convergence: dict[str, Any], sess
             "Finish that branch only until its exit condition is met, then return to the checkpoint above.",
         ])
     elif closed:
-        lines.append("Closed temporary branches (do not resume unless the user explicitly reopens one):")
-        lines.extend(f"- {_text(row.get('summary'), 180)}" for row in closed)
+        lines.append(
+            f"Closed temporary branches: {len(closed)} (do not resume unless the user explicitly reopens one)."
+        )
         lines.append("Continue the current Goal stage. A closed branch remaining in chat history is not an active task.")
     else:
         lines.append("Continue the current Goal stage; do not infer a new active task from stale compacted chat history.")

@@ -1,7 +1,7 @@
 {
   "name": "codex-goal-supervisor",
-  "version": "2.8.10+codex.20260817054749",
-  "description": "Execution convergence for long Codex loops: preserve goals, prove progress, recover, and finish with evidence",
+  "version": "3.1.0+codex.20260822235720",
+  "description": "Low-noise execution convergence for ordinary Codex work and long-running Goals",
   "author": {
     "name": "Codex Goal Supervisor contributors"
   },
@@ -9,14 +9,17 @@
   "interface": {
     "displayName": "Codex Goal Supervisor",
     "shortDescription": "Keep long Codex loops aligned, verifiable, and convergent.",
-    "longDescription": "Codex Goal Supervisor is a low-noise administrative layer for long-running Codex work. It preserves durable direction in a concise North Star, keeps concrete execution in a separate Goal-mode contract, distinguishes activity from evidence-backed progress, restores the active Goal after bounded interruptions and compaction, preserves bounded context across large reads, and uses a sparse read-only LLM Judge only for high-value ambiguity. Optional specialist capabilities remain available without forcing tickets, receipts, or governance ceremony onto ordinary work.",
+    "longDescription": "Codex Goal Supervisor is a low-noise execution-convergence tool with one capability core and inherited runtime profiles. The General Profile keeps ordinary Codex work unblocked while exposing observer, evidence, context, procedure, specialist, validation, and recovery capabilities on demand. The Goal Profile inherits that baseline and strengthens durable North Star, detailed Goal, return-path, route, deviation, phase, and final-certification behavior without duplicating implementations or forcing tickets, receipts, and governance ceremony onto ordinary work.",
     "developerName": "Codex Goal Supervisor contributors",
     "category": "Productivity",
     "capabilities": [
       "Background advisory observation",
+      "Inherited General and Goal capability profiles",
+      "Content-aware project runtime parity and recovery",
       "Dual North Star and detailed Goal-contract alignment",
       "Sparse read-only Codex CLI LLM Judge",
       "Goal-return recovery after bounded interruptions and compaction",
+      "Required General instruction hygiene for resolved corrections and compacted temporary requests",
       "Hierarchical local context continuity for large reads",
       "Evidence-backed final North Star regression certification",
       "Silent product-write verification debt with completion-claim reminders",
@@ -32,6 +35,7 @@
       "First-principle route convergence with targeted stagnation recovery",
       "Verified project-local procedure Skills and idempotent service runners",
       "Evidence-bearing cross-thread collaboration liveness",
+      "Hierarchical parent-child Goal workstreams for independent Codex tasks",
       "Versioned Git marketplace auto-update for new Codex sessions"
     ],
     "defaultPrompt": "Use Codex Goal Supervisor only where it creates net execution benefit; keep ordinary work unblocked."

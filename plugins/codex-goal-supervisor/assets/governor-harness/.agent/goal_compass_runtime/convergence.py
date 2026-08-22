@@ -13,7 +13,7 @@ import re
 from typing import Any
 
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 MAX_ITERATIONS = 64
 MAX_EVIDENCE = 128
 MAX_COLLABORATION_ROUNDS = 32
@@ -22,6 +22,7 @@ MAX_GOAL_LIST_ITEMS = 8
 MAX_GOAL_TEXT = 360
 MAX_GOAL_COVERAGE_LABELS = 8
 MAX_SEGMENT_HISTORY = 64
+MAX_GOAL_HISTORY = 16
 COLLABORATION_PROGRESS_TRANSITIONS = {
     "BLOCKED_WITH_EVIDENCE",
     "DELIVERED",
@@ -36,6 +37,7 @@ def empty_state() -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "goal_stack": {
             "l0_final_goal": None,
+            "goal_identity_sha256": None,
             "l1_success_criteria": [],
             "l2_current_stage": None,
             "l3_current_action": None,
@@ -83,8 +85,10 @@ def empty_state() -> dict[str, Any]:
         "segments": {
             "active": {},
             "completed": [],
+            "superseded": [],
             "last_reminder": None,
         },
+        "goal_history": [],
         "recovery": {
             "latest_checkpoint": None,
             "blocked_reason": None,
@@ -121,6 +125,30 @@ def _bounded_text(value: Any) -> str | None:
 
 def _bounded_strings(values: Any) -> list[str]:
     return [value[:MAX_GOAL_TEXT] for value in _strings(values)[:MAX_GOAL_LIST_ITEMS]]
+
+
+def goal_contract_fingerprint(north_star: dict[str, Any]) -> str:
+    """Hash authority-bearing Goal fields, excluding read-time/runtime metadata."""
+    definition = north_star.get("goal_definition") if isinstance(north_star.get("goal_definition"), dict) else {}
+    anti_goals = list(dict.fromkeys([
+        *_strings(north_star.get("anti_goals")),
+        *_strings(definition.get("non_goals")),
+    ]))
+    payload = {
+        "confirmed": bool(north_star.get("confirmed")),
+        "goal": str(north_star.get("goal") or ""),
+        "goal_mode_objective": str(north_star.get("goal_mode_objective") or ""),
+        "goal_definition": definition,
+        "main_path": _strings(north_star.get("main_path")),
+        "allowed_subgoals": _strings(north_star.get("allowed_subgoals")),
+        "anti_goals": anti_goals,
+        "backlog_domains": _strings(north_star.get("backlog_domains")),
+        "protected_principles": _strings(north_star.get("protected_principles")),
+        "core_path_patterns": _strings(north_star.get("core_path_patterns")),
+    }
+    return hashlib.sha256(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
 
 
 def _bounded_actions(values: Any) -> list[dict[str, Any]]:
@@ -591,8 +619,13 @@ def build_goal_stack(
         for row in phase.get("completed_phases", [])
         if isinstance(row, dict) and str(row.get("phase_id") or "").strip()
     ]
+    identity_source = str(north_star.get("goal_mode_objective") or north_star.get("goal") or "").strip()
     return {
         "l0_final_goal": str(north_star.get("goal") or "").strip() or None,
+        "goal_identity_sha256": (
+            hashlib.sha256(identity_source.encode("utf-8")).hexdigest()
+            if identity_source else None
+        ),
         "l1_success_criteria": _acceptance_criteria(north_star, active_ticket),
         "l2_current_stage": stage,
         "l3_current_action": action,
@@ -615,28 +648,84 @@ def refresh(
     defaults = empty_state()
     for key, value in defaults.items():
         row.setdefault(key, copy.deepcopy(value))
+    row["schema_version"] = SCHEMA_VERSION
     recovery = row.get("recovery") if isinstance(row.get("recovery"), dict) else {}
     for key, value in defaults["recovery"].items():
         recovery.setdefault(key, copy.deepcopy(value))
     row["recovery"] = recovery
     previous = row.get("goal_stack") if isinstance(row.get("goal_stack"), dict) else {}
-    row["goal_stack"] = build_goal_stack(
+    next_stack = build_goal_stack(
         north_star,
         phase,
         ticket,
         current_action=current_action if current_action is not None else previous.get("l3_current_action"),
         expected_evidence=expected_evidence if expected_evidence is not None else previous.get("l3_expected_evidence"),
     )
+    segments = row.get("segments") if isinstance(row.get("segments"), dict) else {}
+    active_segments = segments.get("active") if isinstance(segments.get("active"), dict) else {}
+    valid_node_ids = {
+        str(item.get("node_id") or "").strip()
+        for item in next_stack.get("goal_contract", {}).get("modules", [])
+        if isinstance(item, dict) and str(item.get("node_id") or "").strip()
+    }
+    previous_goal = str(previous.get("l0_final_goal") or "").strip()
+    next_goal = str(next_stack.get("l0_final_goal") or "").strip()
+    previous_identity = str(previous.get("goal_identity_sha256") or "").strip()
+    next_identity = str(next_stack.get("goal_identity_sha256") or "").strip()
+    identity_changed = bool(previous_identity and next_identity and previous_identity != next_identity)
+    goal_text_changed = bool(previous_goal and next_goal and previous_goal != next_goal)
+    legacy_active_mismatch = bool(active_segments) and bool(valid_node_ids) and any(
+        str(node_id) not in valid_node_ids for node_id in active_segments
+    )
+    goal_generation_changed = identity_changed or goal_text_changed or legacy_active_mismatch
+
     completion = row.get("goal_completion") if isinstance(row.get("goal_completion"), dict) else {}
+    if goal_generation_changed:
+        history = [item for item in row.get("goal_history", []) if isinstance(item, dict)]
+        history.append({
+            "transition": "SUPERSEDED_BY_GOAL_CHANGE",
+            "superseded_at": updated_at,
+            "goal": previous_goal or None,
+            "goal_identity_sha256": previous_identity or None,
+            "activity": copy.deepcopy(row.get("activity", {})),
+            "progress": copy.deepcopy(row.get("progress", {})),
+            "goal_completion_status": completion.get("status"),
+            "active_segment_ids": [str(value) for value in active_segments][:MAX_GOAL_MODULES],
+            "completed_segment_ids": [
+                str(item.get("node_id") or "")
+                for item in segments.get("completed", [])
+                if isinstance(item, dict)
+            ][:MAX_SEGMENT_HISTORY],
+        })
+        superseded = [item for item in segments.get("superseded", []) if isinstance(item, dict)]
+        for item in list(active_segments.values()) + [
+            value for value in segments.get("completed", []) if isinstance(value, dict)
+        ]:
+            archived = copy.deepcopy(item)
+            archived.update({
+                "previous_status": archived.get("status"),
+                "status": "SUPERSEDED",
+                "transition": "SUPERSEDED_BY_GOAL_CHANGE",
+                "superseded_at": updated_at,
+                "next_reminder_at": None,
+            })
+            superseded.append(archived)
+        for key in ("activity", "progress", "evidence", "iterations", "collaboration", "recovery", "judge"):
+            row[key] = copy.deepcopy(defaults[key])
+        row["segments"] = copy.deepcopy(defaults["segments"])
+        row["segments"]["superseded"] = superseded[-MAX_SEGMENT_HISTORY:]
+        row["goal_history"] = history[-MAX_GOAL_HISTORY:]
+        if completion.get("status") != "CERTIFIED_COMPLETE":
+            completion = copy.deepcopy(defaults["goal_completion"])
+
+    row["goal_stack"] = next_stack
     if completion.get("status") == "CERTIFIED_COMPLETE":
-        current_goal_hash = hashlib.sha256(
-            json.dumps(north_star, ensure_ascii=False, sort_keys=True).encode("utf-8")
-        ).hexdigest()
+        current_goal_hash = goal_contract_fingerprint(north_star)
         if completion.get("north_star_hash") != current_goal_hash:
             completion = copy.deepcopy(completion)
             completion["status"] = "STALE_GOAL_CHANGED"
             completion["failure_reasons"] = ["The confirmed North Star changed after final regression."]
-            row["goal_completion"] = completion
+    row["goal_completion"] = completion
     row["updated_at"] = updated_at
     return row
 

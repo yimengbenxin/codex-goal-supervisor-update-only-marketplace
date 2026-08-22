@@ -1,6 +1,6 @@
 # Codex Goal Supervisor
 
-Codex Goal Supervisor is an execution-convergence tool for long-running Codex work. It helps an Agent preserve the user's real objective, distinguish activity from progress, recover after interruptions, and finish with evidence without turning supervision into the work itself.
+Codex Goal Supervisor is an execution-convergence tool for ordinary Codex work and long-running Goals. It provides one capability core through two inherited runtime Profiles: General keeps ordinary work quiet and unblocked; Goal strengthens durable direction, long-run recovery, and final certification without creating a second implementation.
 
 ## Why We Built This
 
@@ -67,7 +67,10 @@ Its supreme rule is:
 
 ```mermaid
 flowchart TB
-    U["User intent"] --> NS["North Star<br/>durable direction"]
+    U["User explicitly activates the plugin"] --> CORE["Universal capability core<br/>one implementation per capability"]
+    CORE --> GP["General Profile<br/>ordinary work, low-noise defaults"]
+    GP -->|"Goal selected"| GPF["Goal Profile<br/>inherits General + Goal promotions"]
+    GPF --> NS["North Star<br/>durable direction"]
     NS --> GC["Goal-mode contract<br/>modules, dependencies, outputs, acceptance"]
 
     subgraph CR["Codex runtime surfaces"]
@@ -80,6 +83,7 @@ flowchart TB
     end
 
     CR --> H["Repo-local Goal Supervisor hook"]
+    H --> CORE
     H --> OB["Silent observer<br/>bounded counters and exact evidence"]
     OB --> CV["Convergence controller<br/>activity != progress"]
     OB --> GR["Goal-return controller<br/>temporary branch recovery"]
@@ -140,21 +144,23 @@ are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.m
 Source, issues, and releases are published at
 [github.com/yimengbenxin/codex-goal-supervisor](https://github.com/yimengbenxin/codex-goal-supervisor).
 
-Its capabilities are goal-mode problem-solving skills: they teach the execution
-agent how to recover, validate, delegate, or clean up, but do not take over the
-product task or its final judgment.
+Its capabilities are project execution tools available through the General
+Profile and inherited by Goal mode. They teach the execution agent how to
+recover, validate, delegate, or clean up, but do not take over the product task
+or its final judgment.
 
 ## Current Operating Model
 
 Codex Goal Supervisor has one public plugin identity. Release numbers describe internal compatibility only; upgrades replace older installed runtime files in place while preserving project-owned state.
 
-The plugin has two layers:
+The plugin has one capability core and two runtime Profiles:
 
-- **Implicit background observer:** after explicit project installation, a repo-local hook quietly records small counters and concrete signals. It normally says nothing. It does not require tickets, role receipts, status checks, or cleanup passes.
+- **General Profile:** after explicit project installation, a repo-local hook quietly records small counters and concrete signals. It normally says nothing. It exposes shared capabilities without requiring a North Star, native Goal, ticket, role receipt, status check, or cleanup pass. Two instruction-hygiene controls are required in the background: a completed temporary request cannot become the primary task again after compaction, and a confirmed rejected element cannot persist as repeated negative wording in titles, comments, documentation, or completion summaries.
+- **Goal Profile:** inherits every General requirement and promotes the existing North Star, detailed Goal, Goal Return, route, deviation, phase, deadline, and final-certification policies when Goal mode is selected.
 - **Project procedure memory:** successful fixed operations are summarized locally without copying chat history. A verified local-service launch produces an idempotent start/status/stop runner; other command sequences require success in two independent tasks before becoming a project-local Skill. Sensitive, destructive, read-only, transient, and shell-composed commands are never materialized.
-- **Explicit capability layer:** explicit activation first requires one structured project North Star and the matching Codex Goal mode. Custodian, Company roles, Auditor, Janitor, MDCP, convergence records, and bounded tickets remain on demand.
+- **Explicit capability layer:** explicit plugin activation exposes the General Profile without forcing a North Star or native Goal. Selecting the Goal Profile then requires one structured project North Star and the matching Codex Goal mode. Custodian, Company roles, Auditor, Janitor, MDCP, convergence records, and bounded tickets remain on demand.
 
-North Star setup is not part of the silent observer. When the user explicitly activates Codex Goal Supervisor for a substantive task, the AI first establishes or reuses the concise project-owned North Star and its detailed executable contract, then starts native Codex Goal mode with the exact `goal_mode_objective` returned by `goal-set --require-detailed`. It verifies the native objective with `get_goal` before implementation; a rough request or concise North Star is never a substitute. The Goal-mode contract is 2,000-3,500 characters. It includes module-level hour targets and the actionable open-source reuse route produced by current research. Super-complex work also references a project plan longer than 4,000 characters while keeping the compressed contract in Goal mode. Unrelated tasks are never auto-enrolled.
+North Star setup is not part of the silent observer. Explicit plugin activation starts the General Profile and does not force ordinary work into Goal mode. When the user selects the Goal Profile for a substantive task, the AI first establishes or reuses the concise project-owned North Star and its detailed executable contract, then starts native Codex Goal mode with the exact `goal_mode_objective` returned by `goal-set --require-detailed`. It verifies the native objective with `get_goal` before implementation; a rough request or concise North Star is never a substitute. The Goal-mode contract is 2,000-3,500 characters. It includes module-level hour targets and the actionable open-source reuse route produced by current research. Super-complex work also references a project plan longer than 4,000 characters while keeping the compressed contract in Goal mode. Unrelated tasks are never auto-enrolled.
 
 When a super-complex project cannot converge inside one useful Goal, the plugin
 supports a shallow program outline and one detailed current phase at a time.
@@ -184,6 +190,8 @@ instead of forcing the Agent to infer nesting from repeated failures.
 | Destructive `git reset`/`git clean` | Block |
 | Direct control-state edit | Block |
 | Exact active-ticket forbidden or immutable path | Block |
+| A confirmed removed/rejected element is reintroduced into a publication, narrative artifact, or later completion summary | Block only that residue; require the canonical positive result |
+| Compaction follows a completed temporary request | Restore the primary task and a tombstone count; never re-inject the temporary request text |
 | A local manual/device prerequisite is used to stop an unfinished confirmed Goal | Select a dependency-ready Goal module and continue it before Stop; one planning-only retry is allowed, while a proven global blocker may stop normally |
 | Hook/runtime failure | Fail open; report once |
 
@@ -201,6 +209,7 @@ Warnings do not require a ticket and do not stop execution. Generic semantic gue
 The convergence controller uses both layers. Explicit North Star anti-goals and explicit Goal-contract non-goals are tracked separately. A write that does not have an obvious positive module match is not automatically wrong or blocked; it may be a prerequisite or bounded exploration, and only becomes a low-noise calibration question when a sparse Judge is otherwise warranted.
 - **Custodian:** optional `request --text ...` analysis for meaningful goal/scope changes.
 - **Company roles:** optional independent specialist work. Zero roles is valid; missing optional receipts do not block delivery.
+- **Hierarchical Goal workstreams:** a super-large parent Goal can launch independent Codex tasks only after dependency, shared-contract, write-scope, consumer, validation, and net-benefit checks. Each child owns one detailed Goal and returns verified outputs to the parent integration task.
 - **Specialist role library:** an optional pinned Agency Agents catalog lets the main thread search and read complete expert prompts without making those profiles decision authorities or copying them into the user project.
 - **Expert-assisted Goal authoring:** while authoring a new detailed Goal for an identifiable industry, run one local `goal-brief --auto-select` match. A high-confidence result must load and use that expert as structured Goal input. A low-confidence result asks the user once to choose a candidate or skip; a non-domain result stays silent. The main thread remains the sole Goal author.
 - **Live technical route:** every newly authored or materially rewritten detailed Goal contains a complete high-level node route before implementation. `goal-set --require-detailed` starts a loopback read-only dashboard and returns its URL. The Codex in-app browser opens that URL when available; node detail expansion remains optional.
@@ -227,7 +236,11 @@ python3 .agent/goal_compass.py convergence \
 
 Until that command passes, the truthful state is implementation finished but `NEEDS_FINAL_REGRESSION`. A failed regression remains `FINAL_REGRESSION_FAILED`; only `CERTIFIED_COMPLETE` means the North Star may be reported complete. The certificate becomes stale if the confirmed North Star is replaced.
 
-## Goal Return After Temporary Requests
+## Instruction Hygiene And Goal Return
+
+After explicit project activation, General Profile keeps one bounded primary-task anchor and treats clearly marked side requests as temporary branches. When a temporary branch finishes, it is tombstoned. Compaction recovery restores the current primary task and only the fact that closed branches exist; it never re-injects their raw wording. This prevents a recent one-off request from being amplified into the next primary task across repeated compactions.
+
+General Profile also canonicalizes resolved subtraction corrections. An explicit removal is confirmed immediately; a rhetorical question such as "do we need X?" becomes active only after the Agent itself confirms the removal. The correction response is allowed once. Later attempts to preserve the rejected element in PR titles, commit/tag text, narrative files, or completion summaries are blocked in favor of the positive canonical result. Ordinary product code remains available, and an explicit user instruction can reopen the element. State is local, bounded, and redacted.
 
 When a confirmed project Goal exists, a new user message is treated as a bounded branch unless it explicitly replaces the Goal or establishes a persistent constraint. The repo-local hook records only a short redacted summary, affected paths, lifecycle state, and the stored Goal checkpoint. `Stop` closes a completed branch; `PreCompact`/`PostCompact` seal the state; `SessionStart(source=compact)` restores the current Goal and marks closed branches as inactive. A plain `continue` resumes the Goal without creating another branch.
 

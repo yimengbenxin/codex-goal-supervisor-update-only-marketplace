@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "profile_id": "general-initial",
+  "inherits": null,
+  "source_plugin_version": "3.1.0+codex.20260822235720",
+  "defaults": {"availability": "available", "obligation": "optional", "invocation": "explicit", "enforcement": "none", "preconditions": []},
+  "policies": {
+    "activation.explicit_opt_in": {"obligation": "required", "invocation": "explicit", "preconditions": ["user_explicitly_selected_plugin"]},
+    "observer.low_noise": {"obligation": "required", "invocation": "background", "enforcement": "advisory", "preconditions": ["project_explicitly_activated"]},
+    "runtime.tool_normalization": {"obligation": "required", "invocation": "internal", "preconditions": ["hook_event_received"]},
+    "observer.verification_debt": {"obligation": "conditional", "invocation": "background", "enforcement": "advisory", "preconditions": ["product_write", "unsupported_completion_claim"]},
+    "convergence.activity_evidence": {"obligation": "conditional", "invocation": "background", "preconditions": ["convergence_state_available"]},
+    "convergence.stagnation": {"obligation": "conditional", "invocation": "background", "enforcement": "advisory", "preconditions": ["repeated_iterations_without_new_evidence"]},
+    "judge.sparse_llm": {"obligation": "conditional", "invocation": "internal", "enforcement": "advisory", "preconditions": ["ambiguous_high_consequence_novel_case"]},
+    "convergence.route_incidents": {"obligation": "conditional", "invocation": "background", "enforcement": "advisory", "preconditions": ["same_action_repeated_without_new_evidence"]},
+    "context.large_read": {"obligation": "conditional", "invocation": "either", "enforcement": "advisory", "preconditions": ["genuinely_large_read"]},
+    "context.read_only_subagents": {"obligation": "conditional", "invocation": "background", "enforcement": "advisory", "preconditions": ["large_read", "two_independent_slices", "saved_context_exceeds_coordination_cost"]},
+    "collaboration.liveness": {"obligation": "conditional", "invocation": "background", "enforcement": "advisory", "preconditions": ["cross_thread_rounds", "no_new_evidence"]},
+    "runtime.artifact_tracking": {"obligation": "required", "invocation": "internal", "preconditions": ["project_runtime_active"]},
+    "instruction.correction_canonicalization": {"obligation": "required", "invocation": "background", "enforcement": "targeted_block", "preconditions": ["project_explicitly_activated"]},
+    "instruction.compaction_return": {"obligation": "required", "invocation": "background", "enforcement": "advisory", "preconditions": ["project_explicitly_activated"]},
+    "goal.hierarchical_workstreams": {"obligation": "optional", "invocation": "explicit", "enforcement": "none", "preconditions": ["structured_detailed_parent_goal", "independent_workstreams", "positive_net_execution_benefit"]},
+    "feedback.local_consent": {"obligation": "conditional", "invocation": "either", "preconditions": ["diagnostic_event_or_explicit_feedback_call"]},
+    "distribution.editions": {"obligation": "required", "invocation": "internal", "enforcement": "targeted_block", "preconditions": ["release_build"]},
+    "release.verified_publish": {"obligation": "required", "invocation": "explicit", "enforcement": "targeted_block", "preconditions": ["release_requested"]},
+    "install.project_runtime": {"obligation": "required", "invocation": "internal", "enforcement": "targeted_block", "preconditions": ["project_explicitly_activated"]},
+    "state.atomic_store": {"obligation": "required", "invocation": "internal", "enforcement": "targeted_block", "preconditions": ["authority_bearing_state_write"]},
+    "hooks.cross_platform": {"obligation": "required", "invocation": "internal", "enforcement": "advisory", "preconditions": ["hook_surface_available"]},
+    "validation.cache_fail_fast": {"obligation": "required", "invocation": "internal", "enforcement": "targeted_block", "preconditions": ["validation_chain_runs"]}
+  }
+}

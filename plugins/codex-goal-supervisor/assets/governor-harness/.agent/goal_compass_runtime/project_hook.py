@@ -40,6 +40,11 @@ from goal_compass_runtime.observer import (
 from goal_compass_runtime.route_incidents import build_context as build_route_context
 from goal_compass_runtime.state_store import exclusive_file_lock, load_json, utc_now_iso, write_json
 from goal_compass_runtime.phased_goal import record_activity as record_phase_activity
+from goal_compass_runtime.goal_workstreams import (
+    parent_alignment as goal_workstream_parent_alignment,
+    thread_context as goal_workstream_thread_context,
+    workstream_for_thread,
+)
 from goal_compass_runtime.convergence import (
     apply_observation as apply_convergence_observation,
     auto_start_segment,
@@ -71,6 +76,13 @@ from goal_compass_runtime.goal_return import (
     record_goal_change_confirmation,
     resolve_goal_change_confirmation,
 )
+from goal_compass_runtime.instruction_hygiene import (
+    on_compact as instruction_hygiene_compact,
+    on_pre_tool as instruction_hygiene_pre_tool,
+    on_session_start as instruction_hygiene_session_start,
+    on_stop as instruction_hygiene_stop,
+    on_user_prompt as instruction_hygiene_user_prompt,
+)
 from goal_compass_runtime.procedure_memory import (
     finalize_thread as finalize_procedure_thread,
     record_successful_command as record_procedure_command,
@@ -101,8 +113,11 @@ CONTEXT_CAPSULE = AGENT / "runtime" / "context" / "index.json"
 GOAL_RETURN_STATE = AGENT / "runtime" / "goal_return" / "state.json"
 GOAL_RETURN_LOCK = AGENT / "runtime" / "goal_return" / "state.lock"
 GOAL_RETURN_EVENTS = AGENT / "runtime" / "goal_return" / "events.jsonl"
+INSTRUCTION_HYGIENE_STATE = AGENT / "runtime" / "instruction_hygiene.json"
+INSTRUCTION_HYGIENE_LOCK = AGENT / "runtime" / "instruction_hygiene.lock"
 PROCEDURE_MEMORY_STATE = AGENT / "runtime" / "procedure_memory.json"
 PROCEDURE_MEMORY_LOCK = AGENT / "runtime" / "procedure_memory.lock"
+GOAL_WORKSTREAMS = AGENT / "runtime" / "goal_workstreams.json"
 FULL_COMPASS = AGENT / "goal_compass.py"
 
 CONTROL_PATTERNS = (
@@ -111,6 +126,7 @@ CONTROL_PATTERNS = (
     ".agent/validation_catalog.json",
     ".agent/prune_plan.json",
     ".agent/tool_mode.json",
+    ".agent/runtime/goal_workstreams.json",
 )
 
 
@@ -479,24 +495,46 @@ def handle_context_event(event: dict[str, Any]) -> str | None:
     north = load_json(NORTH_STAR, {})
     convergence = load_json(CONVERGENCE_STATE, empty_convergence_state())
     if phase == "SessionStart":
+        workstream_context = goal_workstream_thread_context(
+            load_json(GOAL_WORKSTREAMS, {}), north, event_thread_id(event),
+        )
         contexts = [
             recovery_context(PROJECT_ROOT, CONTEXT_STATE, CONTEXT_LOCK, CONTEXT_CAPSULE, event),
+            instruction_hygiene_session_start(
+                INSTRUCTION_HYGIENE_STATE,
+                INSTRUCTION_HYGIENE_LOCK,
+                event,
+                goal_active=bool(north.get("confirmed") and north.get("goal")),
+            ),
             goal_return_session_start(
                 GOAL_RETURN_STATE, GOAL_RETURN_LOCK, GOAL_RETURN_EVENTS,
                 north, convergence, event,
             ),
+            workstream_context,
         ]
         return "\n\n".join(value for value in contexts if value) or None
     if phase == "SubagentStart":
-        return subagent_context(PROJECT_ROOT, CONTEXT_STATE, CONTEXT_CAPSULE, event)
+        return "\n\n".join(value for value in (
+            subagent_context(PROJECT_ROOT, CONTEXT_STATE, CONTEXT_CAPSULE, event),
+            goal_workstream_thread_context(
+                load_json(GOAL_WORKSTREAMS, {}), north, event_thread_id(event),
+            ),
+        ) if value) or None
     if phase == "UserPromptSubmit":
+        hygiene_context = instruction_hygiene_user_prompt(
+            INSTRUCTION_HYGIENE_STATE,
+            INSTRUCTION_HYGIENE_LOCK,
+            event,
+            goal_active=bool(north.get("confirmed") and north.get("goal")),
+        )
         goal_change = goal_change_confirmation_context(north, convergence, event)
         if goal_change:
-            return goal_change
-        return goal_return_user_prompt(
+            return "\n\n".join(value for value in (hygiene_context, goal_change) if value)
+        goal_context = goal_return_user_prompt(
             GOAL_RETURN_STATE, GOAL_RETURN_LOCK, GOAL_RETURN_EVENTS,
             north, convergence, event,
         )
+        return "\n\n".join(value for value in (hygiene_context, goal_context) if value) or None
     if phase == "Stop":
         goal_return_stop(GOAL_RETURN_STATE, GOAL_RETURN_LOCK, GOAL_RETURN_EVENTS, north, event)
         try:
@@ -507,16 +545,36 @@ def handle_context_event(event: dict[str, Any]) -> str | None:
         return None
     if phase == "PreCompact":
         seal_before_compact(PROJECT_ROOT, CONTEXT_STATE, CONTEXT_LOCK, CONTEXT_CAPSULE, event)
+        instruction_hygiene_compact(
+            INSTRUCTION_HYGIENE_STATE, INSTRUCTION_HYGIENE_LOCK, event, phase=phase,
+        )
         goal_return_pre_compact(GOAL_RETURN_STATE, GOAL_RETURN_LOCK, GOAL_RETURN_EVENTS, north, event)
         return None
     if phase == "PostCompact":
         record_post_compact(CONTEXT_STATE, CONTEXT_LOCK, event)
+        instruction_hygiene_compact(
+            INSTRUCTION_HYGIENE_STATE, INSTRUCTION_HYGIENE_LOCK, event, phase=phase,
+        )
         goal_return_post_compact(GOAL_RETURN_STATE, GOAL_RETURN_LOCK, GOAL_RETURN_EVENTS, north, event)
-        return None
+        return goal_workstream_thread_context(
+            load_json(GOAL_WORKSTREAMS, {}), north, event_thread_id(event),
+        )
     if phase == "PostToolUse":
         if is_context_read_event(event):
             return record_context_read(PROJECT_ROOT, CONTEXT_STATE, CONTEXT_LOCK, CONTEXT_CAPSULE, event)
     return None
+
+
+def event_thread_id(event: dict[str, Any]) -> str:
+    for key in ("session_id", "sessionId", "thread_id", "threadId"):
+        value = str(event.get(key) or "").strip()
+        if value:
+            return value
+    for key in ("CODEX_THREAD_ID", "CODEX_SESSION_ID"):
+        value = str(os.environ.get(key) or "").strip()
+        if value:
+            return value
+    return ""
 
 
 def record_procedure_evidence(event: dict[str, Any]) -> None:
@@ -946,6 +1004,8 @@ def main() -> int:
     context_message = handle_context_event(event)
     record_procedure_evidence(event)
     if phase in {"PreCompact", "PostCompact"}:
+        if context_message:
+            output(context=context_message, hook_event_name=phase)
         return 0
     if phase in {"SessionStart", "SubagentStart", "UserPromptSubmit"}:
         segment_context = consume_segment_reminder()
@@ -954,9 +1014,14 @@ def main() -> int:
     if context_message:
         output(context=context_message, hook_event_name=phase)
     if phase == "Stop":
+        hygiene_block = instruction_hygiene_stop(
+            INSTRUCTION_HYGIENE_STATE, INSTRUCTION_HYGIENE_LOCK, event,
+        )
         stall_recovery = stop_stall_recovery(event)
         reminder = stop_completion_context(event) if not stall_recovery else None
-        if stall_recovery:
+        if hygiene_block:
+            output(stop_block=hygiene_block)
+        elif stall_recovery:
             output(stop_block=stall_recovery)
         elif reminder:
             output(context=reminder, hook_event_name="Stop")
@@ -969,6 +1034,29 @@ def main() -> int:
     ticket = load_json(CURRENT, {})
     paths = write_paths(event)
     kind = category(event, paths)
+    workstream_state = load_json(GOAL_WORKSTREAMS, {})
+    bound_workstream = workstream_for_thread(workstream_state, event_thread_id(event))
+    if phase == "PreToolUse" and paths and bound_workstream is not None:
+        alignment = goal_workstream_parent_alignment(workstream_state, load_json(NORTH_STAR, {}))
+        product_paths = [
+            path for path in paths
+            if not (path == ".agent" or path.startswith(".agent/") or path == ".codex" or path.startswith(".codex/"))
+        ]
+        if product_paths and alignment.get("status") != "ALIGNED":
+            output(deny=(
+                "The parent North Star or detailed Goal changed after this child Goal was created. "
+                "Return current evidence to the parent thread for reconciliation before further product writes."
+            ))
+            return 0
+    hygiene_signal = instruction_hygiene_pre_tool(
+        INSTRUCTION_HYGIENE_STATE,
+        INSTRUCTION_HYGIENE_LOCK,
+        event,
+        paths=paths,
+    ) if phase == "PreToolUse" else None
+    if hygiene_signal and hygiene_signal.get("deny"):
+        output(deny=str(hygiene_signal.get("reason") or "Resolved correction residue is blocked."))
+        return 0
     goal_return_signal = goal_return_tool_event(
         GOAL_RETURN_STATE,
         GOAL_RETURN_LOCK,

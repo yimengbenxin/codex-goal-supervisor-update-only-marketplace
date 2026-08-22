@@ -20,8 +20,34 @@ still owns the work and final judgment.
 - Do not auto-activate it for a large, long, or multi-step task.
 - Install only after the user explicitly selects Goal Supervisor/Goal Compass for this project.
 - Never activate it from task size alone and never inspect neighboring projects.
-- After explicit activation for a substantive task, establishing the project North Star and starting the Codex client Goal mode are mandatory setup, not optional background capabilities. Keep the layers distinct: the North Star is the concise durable direction; Goal mode contains the detailed executable contract derived from the structured definition.
+- Before the first project command after explicit activation, run
+  `python3 <plugin-root>/scripts/ensure_project_runtime.py <project-root>`.
+  It is a zero-write check when the project runtime already matches the loaded
+  plugin and otherwise performs a state-preserving `--force --no-init` refresh.
+  Never combine it with `--reset-state`. CLI calls use the refreshed runtime
+  immediately; project hooks already loaded by the current Codex task may stay
+  stale until a new task, so do not claim live hook coverage that was not
+  verified.
+- Explicit plugin activation starts the General Profile for ordinary Codex work;
+  it does not by itself require a North Star, native Goal, ticket, company
+  roster, or cleanup pass. The General Profile keeps ordinary aligned work
+  silent and exposes the capability collection on demand.
+- Once the project is explicitly activated, General Profile instruction hygiene is required in the background. A completed temporary request is tombstoned and its raw text is never re-injected after compaction. A confirmed removed or rejected element may appear in the one correction response, but must not survive as repeated negative wording in titles, comments, documentation, or later completion summaries. Block only that residue, keep normal product work available, and honor an explicit user instruction that reopens the element.
+- The Goal Profile inherits every General requirement and may only strengthen
+  policy. After the user explicitly selects Goal mode or a detailed Goal is
+  successfully synchronized, establishing the project North Star and starting
+  the Codex client Goal mode are mandatory setup, not optional background
+  capabilities. Keep the layers distinct: the North Star is the concise
+  durable direction; Goal mode contains the detailed executable contract
+  derived from the structured definition.
 - Never derive the native Codex Goal from the rough request, concise North Star, or a temporary summary. First finish the required reuse research and user consultation, then run `goal-set --require-detailed`. Inside a Codex task, Goal Supervisor uses the official app-server `thread/goal/set` method to install the exact returned `goal_mode_objective`, then calls `thread/goal/get` and verifies byte equality, length, and SHA-256 before committing project state.
+- Before the state-changing Goal call, run the same command once with
+  `--validate-only`. It returns the exact generated objective, length, hash, and
+  contract errors without writing project state, starting the roadmap, probing
+  reuse again, or calling the native Goal API. Review that result, then remove
+  `--validate-only` for the single state-changing call. Do not hand-count an
+  authored `goal_mode_objective` when the standard structured contract is what
+  renders the native objective.
 - An explicitly confirmed durable Goal change may replace an unfinished native Goal without pretending that the old objective was achieved. `goal-set --replace-existing --replacement-reason <reason>` records `SUPERSEDED_BY_USER_DIRECTION_CHANGE`, `objective_achieved=false`, prior objective, acceptance, status, usage, and a local restorable snapshot, then adopts the new project state only after native verification. Do not call `update_goal(status="complete")` for replacement.
 - If app-server synchronization is unavailable outside a Codex task, report `CREATE_REQUIRED` accurately. If synchronization is attempted and fails, leave the existing project North Star untouched and retry the same bounded synchronization; never leave local state claiming a Goal that native Goal mode does not contain.
 - A confirmed `.agent/north_star_goal.json` is project-owned. Do not rewrite it unless the user explicitly asks.
@@ -32,6 +58,11 @@ still owns the work and final judgment.
 - During a long-running confirmed Goal, do not let the North Star become stale when the user clearly introduces a different durable product direction. A temporary request, question, implementation detail, sequencing change, or subgoal already contained by the current North Star stays silent. For a non-explicit direction change, ask only after the sparse Judge confirms at high confidence that it is durable and outside both the North Star and detailed Goal. Ask once per Goal generation across session changes or compaction, never auto-rewrite, and keep execution available. If the user confirms, rebuild the concise North Star and detailed Goal-mode contract together with `goal-set --replace-existing --require-detailed`; never replace only the one-line North Star.
 - Plugin auto-update is a separate device-level capability. It must never activate a project, alter a North Star, or run from project hooks. When the user explicitly asks to enable or repair automatic updates, run `scripts/configure_plugin_auto_update.py`; otherwise leave device scheduling unchanged.
 - A maintainer-created local version is not complete until its exact clean commit has first passed the real Luna Max task named `插件专用测试线程`, including exact native/detailed Goal equality and independent product acceptance, and only then `scripts/publish_verified_release.py` reports `PUBLISHED_AND_VERIFIED`. The publisher refuses to start without that commit-bound black-box evidence, then verifies source and extracted ZIPs before any network write. Never publish first and validate afterward, and never stream uncommitted file saves to clients.
+- Exploratory black-box work against a dirty tree must use
+  `scripts/worktree_fingerprint.py`; hashing `git status` text is insufficient
+  because content can change while the dirty path list remains identical. A
+  dirty-tree PASS is diagnostic only. Release acceptance still requires the
+  exact clean commit and the publisher's commit-bound evidence.
 
 ## Two Layers
 
@@ -59,7 +90,7 @@ Technical-route control is domain-neutral. Every route must be judged against th
 
 Ambiguous semantic judgments are warnings, never hidden approvals or denials. Only exact project-authored anti-goals or drift boundaries may enter this three-confirmation rail. Hook failure is fail-open and must not become product evidence.
 
-For a confirmed Goal, `UserPromptSubmit` also creates a bounded Goal-return branch unless the user explicitly replaces the Goal, promotes a persistent constraint, or simply asks to continue. `Stop` closes a completed branch. After compaction, `SessionStart` restores the current Goal checkpoint and treats closed branches as tombstoned history. A first exact-path replay is silent context, a second is a warning, and a third may reach the sparse Judge. Do not expose this bookkeeping as a ticket or ask the user to manage it.
+For a confirmed Goal, `UserPromptSubmit` also creates a bounded Goal-return branch unless the user explicitly replaces the Goal, promotes a persistent constraint, or simply asks to continue. `Stop` closes a completed branch. After compaction, `SessionStart` restores the current Goal checkpoint and treats closed branches as tombstoned history. Recovery reports only the number of closed branches and never re-injects their raw summaries. A first exact-path replay is silent context, a second is a warning, and a third may reach the sparse Judge. Do not expose this bookkeeping as a ticket or ask the user to manage it.
 
 If a response tries to stop an unfinished confirmed Goal only because of one
 manual, physical-device, login, or other external prerequisite, `Stop` selects
@@ -339,6 +370,43 @@ The concise confirmed North Star remains stable across phases. Phase timing and
 validation telemetry remain local by default and inform future granularity;
 estimated hours are planning evidence, not a reason to fail valid product work.
 
+### Hierarchical Goal Workstreams
+
+For a super-large project with at least two dependency-ready, independently
+valuable workstreams, the parent Codex task may fan out separate Codex tasks.
+This is not Company mode and it is not one role per thread. Use it only when the
+declared parallel time saved is greater than coordination and integration cost.
+
+- The parent task owns the confirmed North Star, the parent detailed Goal,
+  shared contracts, dependency graph, and final integration.
+- Each child task owns exactly one workstream, researches its bounded route,
+  writes its own 2,000-3,500 character detailed Goal, and returns validated
+  outputs and evidence to the parent.
+- Dependent work remains serial. Parallel workstreams must have disjoint
+  writable paths and one shared contract for names, interfaces, schemas,
+  versions, errors, and other cross-workstream semantics.
+- There is no fixed thread count and no ceremonial fanout. Create one task only
+  for each real independent workstream. A project with no net parallel benefit
+  stays in one task.
+- `goal-workstreams --plan-file <plan.json> --validate-only` checks the plan
+  without state changes. Remove `--validate-only` to store it and receive only
+  dependency-ready `thread_launches`.
+- Register every child and final-integration validation ID in
+  `.agent/validation_catalog.json` before plan validation. Unknown or
+  non-executable IDs fail the plan before any child task is created.
+- The Goal Supervisor CLI validates and stores launch payloads but does not
+  pretend to create Codex tasks. The parent Codex task calls the native
+  `create_thread` capability using each returned prompt.
+- A child activates its native Goal with `goal-workstreams --set-goal <id>
+  --definition-file <child.json>`. This binds the child task to the parent Goal
+  hashes and never rewrites `.agent/north_star_goal.json`.
+- A child finishes with `goal-workstreams --complete <id> --evidence-id <id>
+  --summary <summary>`. Assigned validation catalog IDs must pass before the
+  workstream completes or unlocks dependent work.
+- Parent North Star or detailed Goal changes make existing child Goals stale.
+  Child product writes pause while reads and evidence return remain available;
+  the parent reconciles or replaces the affected assignment.
+
 The Goal-mode contract must state:
 
 1. `precise_goal` and reasoned `first_principles`;
@@ -351,6 +419,11 @@ The Goal-mode contract must state:
 8. final end-to-end validation and evidence-backed delivery;
 9. one positive `timebox_hours` for every capability segment, plus a thread-selected reminder interval for segments longer than two hours;
 10. the open-source reuse decisions that belong to each module, and the persistent rule to refresh them every 24 hours of continued work.
+
+For a `SUPER_COMPLEX` plan, use clear section headings for objective, execution
+steps, parallel work, serial work, dependencies, goal contribution, and
+acceptance. The canonical machine-readable heading `goal_contribution` is valid;
+do not add duplicate prose solely to satisfy section detection.
 
 Runtime alignment uses both artifacts without merging them. The North Star is
 the durable direction check. The Goal-mode contract is the specific module,
